@@ -1,0 +1,144 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #f4fbfa;
+    --foreground: #0f172a;
+    --muted: #edf6f5;
+    --muted-foreground: #5f7382;
+    --border: #d8e8e6;
+    --input: #d8e8e6;
+    --ring: #0d9488;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --popover: #ffffff;
+    --popover-foreground: #0f172a;
+    --primary: #0d9488;
+    --primary-foreground: #f8fffe;
+    --secondary: #daf5f1;
+    --secondary-foreground: #0f172a;
+    --accent: #f2fbfa;
+    --accent-foreground: #0f172a;
+    --destructive: #dc2626;
+    --sidebar: #0d1117;
+    --sidebar-foreground: #e8f6f4;
+    --sidebar-primary: #0d9488;
+    --sidebar-primary-foreground: #f8fffe;
+    --sidebar-accent: rgba(255, 255, 255, 0.08);
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: rgba(255, 255, 255, 0.08);
+    --sidebar-ring: #2dd4bf;
+    --radius: 1.25rem;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  html::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(13, 148, 136, 0.15), transparent 30%),
+      linear-gradient(180deg, #f8fffe 0%, #f3fbfa 45%, #eef7f7 100%);
+    color: var(--foreground);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply min-h-screen bg-transparent text-slate-900;
+  }
+
+  .surface-card {
+    @apply rounded-[28px] bg-white shadow-[0_24px_60px_-30px_rgba(15,23,42,0.28)] ring-1 ring-black/5;
+  }
+
+  .soft-grid {
+    background-image:
+      linear-gradient(rgba(13, 148, 136, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13, 148, 136, 0.08) 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
+
+  .interactive {
+    @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_26px_70px_-35px_rgba(13,148,136,0.45)];
+  }
+
+  .shimmer-text {
+    background-image: linear-gradient(120deg, #0d9488 0%, #5eead4 30%, #ccfbf1 50%, #0d9488 80%);
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 5s linear infinite;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 0% center;
+  }
+
+  to {
+    background-position: 220% center;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .ordonnance-print, 
+  .ordonnance-print * { 
+    visibility: visible; 
+  }
+  .ordonnance-print {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%;
+    font-family: Arial, sans-serif;
+    font-size: 12pt;
+    padding: 20px;
+    background: white;
+  }
+}

@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.env
+build-error.log
+build-error-cmd.txt

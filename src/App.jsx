@@ -1,0 +1,112 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import RoleGuard from './components/common/RoleGuard'
+import ProtectedRoute from './components/common/ProtectedRoute'
+import DashboardLayout from './layouts/DashboardLayout'
+import LoginPage from './pages/LoginPage'
+import SignupPage from './pages/SignupPage'
+import VerificationPage from './pages/VerificationPage'
+import LandingPage from './pages/LandingPage'
+
+
+// Shared pages
+import AppointmentsPage from './pages/dashboard/AppointmentsPage'
+import BillingPage from './pages/dashboard/BillingPage'
+import PatientsPage from './pages/dashboard/PatientsPage'
+import PrescriptionsPage from './pages/dashboard/PrescriptionsPage'
+import StatisticsPage from './pages/dashboard/StatisticsPage'
+import WaitingRoomPage from './pages/dashboard/WaitingRoomPage'
+import StaffManagementPage from './pages/dashboard/StaffManagementPage'
+import SettingsPage from './pages/dashboard/SettingsPage'
+
+// Role-specific workspaces
+import ConsultationWorkspace from './pages/dashboard/ConsultationWorkspace'
+
+// Role redirect component based on new requirements
+import { useAppContext } from './context/AppContext'
+
+function RootRedirect() {
+  const { isAuthenticated, isInitializing, role } = useAppContext()
+  if (isInitializing) return null
+  if (!isAuthenticated) return <LandingPage />
+  
+  if (role === 'secretaire') {
+    return <Navigate to="/salle-attente" replace />
+  }
+  return <Navigate to="/dashboard" replace />
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/verification" element={<VerificationPage />} />
+
+          {/* Connected App Routes — require authentication */}
+          <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+            {/* SECRÉTAIRE & DOCTEUR (Shared Access) */}
+            <Route path="/salle-attente" element={<WaitingRoomPage />} />
+            <Route path="/agenda" element={<AppointmentsPage />} />
+            <Route path="/facturation" element={<BillingPage />} />
+            <Route path="/facturation/:id" element={<BillingPage />} />
+            <Route path="/patients" element={<PatientsPage />} />
+            <Route path="/patients/:id" element={<PatientsPage />} />
+
+            {/* DOCTEUR ONLY ROUTES */}
+            <Route 
+              path="/dashboard" 
+              element={
+                <RoleGuard role="docteur">
+                  <StatisticsPage />
+                </RoleGuard>
+              } 
+            />
+            <Route 
+              path="/ordonnances" 
+              element={
+                <RoleGuard role="docteur">
+                  <PrescriptionsPage />
+                </RoleGuard>
+              } 
+            />
+            <Route 
+              path="/equipe" 
+              element={
+                <RoleGuard role="docteur">
+                  <StaffManagementPage />
+                </RoleGuard>
+              } 
+            />
+            <Route 
+              path="/parametres" 
+              element={
+                <RoleGuard role="docteur">
+                  <SettingsPage />
+                </RoleGuard>
+              } 
+            />
+            <Route 
+              path="/consultation/:rdv_id" 
+              element={
+                <RoleGuard role="docteur">
+                  <ConsultationWorkspace />
+                </RoleGuard>
+              } 
+            />
+
+            {/* Legacy redirect logic from old /doctor or /secretary routes */}
+            <Route path="/doctor/*" element={<Navigate to="/" replace />} />
+            <Route path="/secretary/*" element={<Navigate to="/" replace />} />
+          </Route>
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+  )
+}
+
+export default App
