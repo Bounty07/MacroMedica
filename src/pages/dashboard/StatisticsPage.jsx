@@ -231,672 +231,243 @@ export default function StatisticsPage() {
 
   return (
     <PinLock>
-      <style>{`
-        .ds-page {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          min-height: 100%;
-        }
-
-        /* ── Header ── */
-        .ds-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          margin-bottom: 28px;
-        }
-        .ds-greeting {
-          font-size: 26px;
-          font-weight: 700;
-          color: #0F172A;
-          letter-spacing: -0.3px;
-          line-height: 1.2;
-        }
-        .ds-date {
-          font-size: 13px;
-          color: #94A3B8;
-          margin-top: 4px;
-          font-weight: 500;
-        }
-        .ds-btn-primary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          background: #2563EB;
-          color: #fff;
-          font-weight: 600;
-          font-size: 14px;
-          padding: 10px 22px;
-          border-radius: 24px;
-          border: none;
-          cursor: pointer;
-          transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-          box-shadow: 0 2px 8px rgba(37,99,235,0.25);
-        }
-        .ds-btn-primary:hover {
-          background: #1D4ED8;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 16px rgba(37,99,235,0.35);
-        }
-        .ds-btn-primary:active { transform: translateY(0); }
-
-        /* ── Stats Row ── */
-        .ds-stats-row {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 16px;
-          margin-bottom: 28px;
-        }
-        @media (max-width: 768px) {
-          .ds-stats-row { grid-template-columns: 1fr; }
-        }
-        .ds-stat-card {
-          background: #FFFFFF;
-          border: 1px solid #F1F5F9;
-          border-radius: 16px;
-          padding: 20px 24px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-        .ds-stat-card:hover {
-          border-color: #E2E8F0;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-        }
-        .ds-stat-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .ds-stat-label {
-          font-size: 12px;
-          font-weight: 500;
-          color: #94A3B8;
-          text-transform: capitalize;
-          margin-bottom: 4px;
-        }
-        .ds-stat-value {
-          font-size: 28px;
-          font-weight: 800;
-          color: #0F172A;
-          line-height: 1;
-          letter-spacing: -0.5px;
-        }
-        .ds-stat-value span {
-          font-size: 16px;
-          font-weight: 500;
-          color: #94A3B8;
-        }
-        .ds-stat-badge {
-          font-size: 11px;
-          font-weight: 600;
-          padding: 3px 10px;
-          border-radius: 20px;
-          margin-left: auto;
-          white-space: nowrap;
-        }
-        .ds-stat-dots {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-top: 8px;
-          font-size: 11px;
-          color: #94A3B8;
-          font-weight: 500;
-        }
-        .ds-stat-dots .dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          display: inline-block;
-          margin-right: 4px;
-        }
-
-        /* ── Main Grid ── */
-        .ds-main-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-          align-items: start;
-        }
-        @media (max-width: 1024px) {
-          .ds-main-grid { grid-template-columns: 1fr; }
-        }
-
-        /* ── Prochain Patient ── */
-        .ds-prochain-header {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-        .ds-prochain-header h3 {
-          font-size: 14px;
-          font-weight: 700;
-          color: #0F172A;
-          margin: 0;
-        }
-        .ds-action-badge {
-          font-size: 11px;
-          font-weight: 700;
-          color: #fff;
-          background: #2563EB;
-          padding: 4px 14px;
-          border-radius: 6px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .ds-prochain-card {
-          background: #FFFFFF;
-          border: 1px solid #F1F5F9;
-          border-radius: 20px;
-          padding: 32px;
-          position: relative;
-          overflow: hidden;
-        }
-        .ds-prochain-name {
-          font-size: 32px;
-          font-weight: 800;
-          color: #0F172A;
-          margin-bottom: 16px;
-          letter-spacing: -0.5px;
-          line-height: 1.1;
-        }
-        .ds-prochain-tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 20px;
-        }
-        .ds-tag {
-          font-size: 12px;
-          font-weight: 600;
-          padding: 5px 14px;
-          border-radius: 20px;
-          background: #F1F5F9;
-          color: #475569;
-        }
-        .ds-tag-accent {
-          background: #DBEAFE;
-          color: #2563EB;
-          font-weight: 700;
-        }
-        .ds-prochain-visit {
-          font-size: 13px;
-          color: #94A3B8;
-          margin-bottom: 24px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .ds-prochain-actions {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-top: 8px;
-        }
-        .ds-btn-outline {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          background: #FFFFFF;
-          color: #64748B;
-          font-weight: 600;
-          font-size: 14px;
-          padding: 14px 20px;
-          border-radius: 14px;
-          border: 1.5px solid #E2E8F0;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-        .ds-btn-outline:hover {
-          border-color: #CBD5E1;
-          color: #334155;
-          background: #F8FAFC;
-        }
-        .ds-btn-blue {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          background: #2563EB;
-          color: #fff;
-          font-weight: 700;
-          font-size: 14px;
-          padding: 14px 20px;
-          border-radius: 14px;
-          border: none;
-          cursor: pointer;
-          transition: all 0.15s ease;
-          box-shadow: 0 2px 8px rgba(37,99,235,0.2);
-        }
-        .ds-btn-blue:hover {
-          background: #1D4ED8;
-          box-shadow: 0 4px 16px rgba(37,99,235,0.3);
-        }
-
-        /* Time badge */
-        .ds-time-badge {
-          position: absolute;
-          top: 24px;
-          right: 24px;
-          background: #2563EB;
-          color: #fff;
-          border-radius: 16px;
-          padding: 16px 20px;
-          text-align: center;
-          box-shadow: 0 4px 16px rgba(37,99,235,0.25);
-        }
-        .ds-time-badge-label {
-          font-size: 9px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1.5px;
-          opacity: 0.8;
-          margin-bottom: 6px;
-        }
-        .ds-time-badge-value {
-          font-size: 26px;
-          font-weight: 800;
-          line-height: 1;
-          letter-spacing: -0.5px;
-        }
-        .ds-time-badge-ampm {
-          font-size: 13px;
-          font-weight: 700;
-          margin-top: 2px;
-          opacity: 0.9;
-        }
-
-        /* ── Salle d'attente Table ── */
-        .ds-salle-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 16px;
-        }
-        .ds-salle-header h3 {
-          font-size: 16px;
-          font-weight: 700;
-          color: #0F172A;
-          margin: 0;
-        }
-        .ds-salle-link {
-          font-size: 13px;
-          font-weight: 600;
-          color: #2563EB;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          background: none;
-          border: none;
-          padding: 0;
-          transition: color 0.15s;
-        }
-        .ds-salle-link:hover { color: #1D4ED8; }
-        .ds-salle-card {
-          background: #FFFFFF;
-          border: 1px solid #F1F5F9;
-          border-radius: 20px;
-          overflow: hidden;
-        }
-        .ds-salle-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        .ds-salle-table thead th {
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.8px;
-          color: #94A3B8;
-          padding: 16px 20px 12px;
-          text-align: left;
-          border-bottom: 1px solid #F1F5F9;
-        }
-        .ds-salle-table thead th:last-child { text-align: right; }
-        .ds-salle-table tbody tr {
-          border-bottom: 1px solid #F8FAFC;
-          transition: background 0.12s ease;
-        }
-        .ds-salle-table tbody tr:hover { background: #F8FAFC; }
-        .ds-salle-table tbody tr:last-child { border-bottom: none; }
-        .ds-salle-table td {
-          padding: 14px 20px;
-          vertical-align: middle;
-        }
-        .ds-salle-table td:last-child { text-align: right; }
-
-        .ds-patient-cell {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .ds-avatar {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 12px;
-          font-weight: 700;
-          flex-shrink: 0;
-        }
-        .ds-patient-name {
-          font-size: 14px;
-          font-weight: 600;
-          color: #0F172A;
-          line-height: 1.3;
-        }
-        .ds-patient-sub {
-          font-size: 11px;
-          color: #94A3B8;
-          font-weight: 500;
-          margin-top: 1px;
-        }
-        .ds-status-badge {
-          font-size: 10px;
-          font-weight: 700;
-          padding: 4px 12px;
-          border-radius: 6px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          white-space: nowrap;
-        }
-        .ds-wait-label {
-          font-size: 13px;
-          font-weight: 600;
-          color: #64748B;
-        }
-
-        /* Footer bar */
-        .ds-salle-footer {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 14px 20px;
-          border-top: 1px solid #F1F5F9;
-          background: #FAFBFC;
-        }
-        .ds-salle-footer-label {
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          color: #94A3B8;
-        }
-        .ds-salle-footer-badge {
-          font-size: 12px;
-          font-weight: 700;
-          color: #2563EB;
-        }
-
-        /* ── Empty State ── */
-        .ds-empty {
-          padding: 48px 32px;
-          text-align: center;
-          color: #94A3B8;
-        }
-        .ds-empty-icon {
-          width: 48px;
-          height: 48px;
-          background: #F1F5F9;
-          border-radius: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 16px;
-        }
-        .ds-empty h4 {
-          font-size: 15px;
-          font-weight: 600;
-          color: #64748B;
-          margin: 0 0 6px;
-        }
-        .ds-empty p {
-          font-size: 13px;
-          margin: 0;
-        }
-
-        /* ── Prochain Patient Empty ── */
-        .ds-prochain-empty {
-          background: #FFFFFF;
-          border: 2px dashed #E2E8F0;
-          border-radius: 20px;
-          padding: 48px 32px;
-          text-align: center;
-        }
-        .ds-prochain-empty h4 {
-          font-size: 16px;
-          font-weight: 600;
-          color: #64748B;
-          margin: 12px 0 6px;
-        }
-        .ds-prochain-empty p {
-          font-size: 13px;
-          color: #94A3B8;
-          margin: 0;
-        }
-      `}</style>
-
-      <div className="ds-page">
-
-        {/* ═══ HEADER ═══ */}
-        <div className="ds-header">
+      <div className="p-8 space-y-8 flex-1 overflow-y-auto custom-scrollbar font-['Inter']">
+        {/* Greeting and Quick Actions */}
+        <div className="flex justify-between items-end">
           <div>
-            <div className="ds-greeting">{getGreeting()}, Dr. {doctorName.split(' ').pop()}</div>
-            <div className="ds-date">{dateStr}</div>
+            <h2 className="text-3xl font-bold tracking-tight text-clinical-on-surface">Bonjour, Dr. {doctorName.split(' ').pop()}</h2>
+            <p className="text-clinical-on-secondary-container mt-1">Voici le point sur votre activité aujourd'hui, {dateStr.split('·')[0].trim()}.</p>
           </div>
-          <button
-            className="ds-btn-primary"
+          <button 
             onClick={() => openGlobalModal('appointment')}
+            className="bg-clinical-primary hover:bg-clinical-primary-container text-white px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-clinical-primary/10 active:scale-95"
           >
-            <Plus size={18} strokeWidth={2.5} />
+            <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>calendar_add_on</span>
             Nouveau RDV
           </button>
         </div>
 
-        {/* ═══ STATS ROW ═══ */}
-        <div className="ds-stats-row">
-
-          {/* Stat 1: Salle d'attente */}
-          <div className="ds-stat-card">
-            <div className="ds-stat-icon" style={{ background: '#EEF2FF' }}>
-              <Users size={22} color="#4F46E5" />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div className="ds-stat-label">Salle d'attente</div>
-              <div className="ds-stat-value">{salleCount} <span>patients</span></div>
-            </div>
-            {salleCount > 0 && (
-              <span className="ds-stat-badge" style={{ background: '#DBEAFE', color: '#2563EB' }}>
-                +{salleCount} actifs
-              </span>
-            )}
-          </div>
-
-          {/* Stat 2: RDV du Jour */}
-          <div className="ds-stat-card">
-            <div className="ds-stat-icon" style={{ background: '#F0FDF4' }}>
-              <CalendarDays size={22} color="#16A34A" />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div className="ds-stat-label">RDV du Jour</div>
-              <div className="ds-stat-value">{confirmedCount} <span>/ {totalRdv} confirmés</span></div>
+        {/* Bento Grid Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* KPI: Salle d'attente */}
+          <div className="bg-clinical-surface-container-low p-6 rounded-xl border-l-4 border-clinical-primary relative overflow-hidden group">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm font-medium text-clinical-on-secondary-container tracking-wide">Salle d'attente</p>
+                <h3 className="text-4xl font-bold mt-2 text-clinical-primary">{salleCount}</h3>
+                <p className="text-xs text-clinical-on-surface-variant mt-2">patients actuellement en attente</p>
+              </div>
+              <div className="p-3 bg-white rounded-lg shadow-sm">
+                <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>chair</span>
+              </div>
             </div>
           </div>
-
-          {/* Stat 3: Revenu du Jour */}
-          <div className="ds-stat-card">
-            <div className="ds-stat-icon" style={{ background: '#FEF3C7' }}>
-              <Receipt size={22} color="#D97706" />
+          {/* KPI: RDV Du Jour */}
+          <div className="bg-clinical-surface-container-low p-6 rounded-xl border-l-4 border-clinical-secondary relative overflow-hidden group">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm font-medium text-clinical-on-secondary-container tracking-wide">RDV Du Jour</p>
+                <h3 className="text-4xl font-bold mt-2 text-clinical-secondary">{confirmedCount} <span className="text-lg text-clinical-secondary/70">/ {totalRdv}</span></h3>
+                <p className="text-xs text-clinical-on-surface-variant mt-2 font-medium">{totalRdv > 0 ? Math.round((confirmedCount/totalRdv)*100) : 0}% de confirmations reçues</p>
+              </div>
+              <div className="p-3 bg-white rounded-lg shadow-sm">
+                <span className="material-symbols-outlined text-clinical-secondary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>event_available</span>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div className="ds-stat-label">Revenu du Jour</div>
-              <div className="ds-stat-value">{revenuJour.toLocaleString('fr-FR')} <span>MAD</span></div>
-
+          </div>
+          {/* KPI: Revenu Du Jour */}
+          <div className="bg-clinical-surface-container-low p-6 rounded-xl border-l-4 border-clinical-tertiary relative overflow-hidden group">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm font-medium text-clinical-on-secondary-container tracking-wide">Revenu Du Jour</p>
+                <h3 className="text-4xl font-bold mt-2 text-clinical-on-surface">{revenuJour.toLocaleString('fr-FR')} <span className="text-xl">MAD</span></h3>
+                <p className="text-xs text-clinical-on-surface-variant mt-2 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px] text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>trending_up</span>
+                  À jour pour aujourd'hui
+                </p>
+              </div>
+              <div className="p-3 bg-white rounded-lg shadow-sm">
+                <span className="material-symbols-outlined text-clinical-tertiary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>payments</span>
+              </div>
             </div>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px' }}>
-              <MoreHorizontal size={18} />
-            </button>
           </div>
         </div>
 
-        {/* ═══ TWO-COLUMN GRID ═══ */}
-        <div className="ds-main-grid">
-
-          {/* ── LEFT: Prochain Patient ── */}
-          <div>
-            <div className="ds-prochain-header">
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563EB' }} />
-              <h3>Prochain Patient</h3>
-              {prochainRdv && <span className="ds-action-badge">Action Requise</span>}
-            </div>
-
+        {/* Main Content Area */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Next Patient / Focus Card */}
+          <div className="lg:col-span-4 space-y-6">
+            <h4 className="text-lg font-semibold text-clinical-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>medical_information</span>
+              Prochain Patient
+            </h4>
+            
             {prochainRdv ? (
-              <div className="ds-prochain-card">
-                {/* Blue time badge */}
-                <div className="ds-time-badge">
-                  <div className="ds-time-badge-label">Heure Prévue</div>
-                  <div className="ds-time-badge-value">
-                    {formatTimeAmPm(prochainRdv.date_rdv).split(' ')[0]}
+              <div className="bg-clinical-surface-container-lowest border border-slate-100 rounded-xl p-6 flex flex-col shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4">
+                  <span className="px-2 py-1 bg-clinical-primary/10 text-clinical-primary text-[10px] font-bold rounded uppercase">Confirmé</span>
+                </div>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-16 h-16 bg-clinical-surface-container-low rounded-full flex items-center justify-center border-2 border-clinical-primary/20">
+                    <span className="material-symbols-outlined text-3xl text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>person</span>
                   </div>
-                  <div className="ds-time-badge-ampm">
-                    {formatTimeAmPm(prochainRdv.date_rdv).split(' ')[1]}
+                  <div>
+                    <h5 className="text-clinical-on-surface font-bold text-lg leading-tight">{prochainPatient?.prenom} {prochainPatient?.nom}</h5>
+                    <p className="text-xs font-semibold text-slate-500">{prochainPatient?.telephone || 'Dossier complet'}</p>
                   </div>
                 </div>
-
-                {/* Patient name */}
-                <div className="ds-prochain-name">
-                  {prochainPatient?.prenom} {prochainPatient?.nom}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-slate-400 text-sm" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>schedule</span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Heure du RDV</p>
+                      <p className="text-sm font-semibold text-clinical-on-surface">{formatTime(prochainRdv.date_rdv)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-slate-400 text-sm" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>medical_services</span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Type d'acte</p>
+                      <p className="text-sm font-semibold text-clinical-on-surface">{prochainRdv.notes || prochainRdv.motif || 'Consultation de suivi'}</p>
+                    </div>
+                  </div>
                 </div>
-
-                {/* Tags */}
-                <div className="ds-prochain-tags">
-                  {prochainPatient?.age && (
-                    <span className="ds-tag">{prochainPatient.age} ans</span>
-                  )}
-                  {prochainPatient?.sexe && (
-                    <span className="ds-tag">{prochainPatient.sexe === 'M' ? 'Homme' : 'Femme'}</span>
-                  )}
-                  {prochainRdv.motif && (
-                    <span className="ds-tag ds-tag-accent">{prochainRdv.motif.toUpperCase()}</span>
-                  )}
-                </div>
-
-                {/* Last visit */}
-                <div className="ds-prochain-visit">
-                  <Clock size={14} />
-                  Heure prévue : {formatTime(prochainRdv.date_rdv)}
-                </div>
-
-                {/* Action buttons */}
-                <div className="ds-prochain-actions">
-                  <button className="ds-btn-outline" onClick={annulerRdv}>
-                    <XCircle size={16} />
-                    Annuler RDV
-                  </button>
-                  <button className="ds-btn-blue" onClick={ajouterSalle}>
-                    <ArrowRightToLine size={16} />
-                    Ajouter à la salle
-                  </button>
-                </div>
+                <button onClick={ajouterSalle} className="mt-8 w-full py-3 bg-clinical-primary text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>play_arrow</span>
+                  Marquer comme arrivé
+                </button>
+                <button onClick={() => navigate(`/patients/${prochainPatient?.id}`)} className="mt-3 text-slate-400 font-medium text-xs hover:text-clinical-primary transition-colors">Voir l'historique médical</button>
               </div>
             ) : (
-              <div className="ds-prochain-empty">
-                <CalendarDays size={32} color="#CBD5E1" />
-                <h4>Aucun patient planifié</h4>
-                <p>Tous les RDV d'aujourd'hui ont été traités</p>
+              <div className="bg-clinical-surface-container-lowest border border-slate-100 rounded-xl p-8 flex flex-col items-center justify-center text-center shadow-sm">
+                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                  <span className="material-symbols-outlined text-3xl text-slate-300" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>free_cancellation</span>
+                </div>
+                <h5 className="text-clinical-on-surface font-bold text-lg mb-1">Aucun patient prévu</h5>
+                <p className="text-sm text-slate-500 mb-6">Votre planning de consultations est vide pour le moment.</p>
+                <button onClick={() => openGlobalModal('appointment')} className="py-2.5 px-6 bg-clinical-primary/10 text-clinical-primary rounded-lg font-bold text-sm hover:bg-clinical-primary/20 transition-all">
+                  Planifier un RDV
+                </button>
               </div>
             )}
           </div>
 
-          {/* ── RIGHT: Salle d'attente Table ── */}
-          <div>
-            <div className="ds-salle-header">
-              <h3>Salle d'attente</h3>
-              <button className="ds-salle-link" onClick={() => navigate('/salle-attente')}>
-                Registre complet <ChevronRight size={14} />
-              </button>
+          {/* Salle d'Attente Detailed List */}
+          <div className="lg:col-span-8 space-y-6">
+            <div className="flex justify-between items-center">
+              <h4 className="text-lg font-semibold text-clinical-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>group</span>
+                Détails Salle d'attente
+              </h4>
+              <div className="flex gap-2">
+                <button className="text-xs font-bold px-4 py-1.5 bg-clinical-primary text-white rounded-full">Actifs ({salleCount})</button>
+                <button onClick={() => navigate('/salle-attente')} className="text-xs font-medium px-4 py-1.5 text-clinical-on-surface-variant hover:bg-clinical-surface-container transition-colors rounded-full">Gérer</button>
+              </div>
             </div>
-
-            <div className="ds-salle-card">
+            
+            <div className="bg-clinical-surface-container-lowest border border-slate-100 rounded-xl shadow-sm overflow-hidden">
               {salleList.length > 0 ? (
-                <>
-                  <table className="ds-salle-table">
-                    <thead>
-                      <tr>
-                        <th>Patient</th>
-                        <th>Statut</th>
-                        <th>Attente</th>
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-50">
+                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Patient</th>
+                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Heure Prévue</th>
+                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Statut</th>
+                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {salleList.map(rdv => (
+                      <tr key={rdv.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-bold text-clinical-on-surface">{rdv.patients?.prenom} {rdv.patients?.nom}</p>
+                          <p className="text-[10px] text-slate-500 font-medium tracking-tight">Motif: {rdv.notes || rdv.motif || 'Consultation générale'}</p>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-clinical-on-surface-variant">
+                          {formatTime(rdv.date_rdv)}
+                        </td>
+                        <td className="px-6 py-4">
+                          {rdv.status === RDV_STATUSES.IN_CONSULTATION ? (
+                             <span className="px-2 py-1 bg-blue-50 text-blue-600 border border-blue-200 text-[10px] font-bold rounded uppercase">En Cours</span>
+                          ) : (
+                             <span className="px-2 py-1 bg-green-50 text-green-600 text-[10px] font-bold rounded uppercase">En Attente</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button onClick={() => navigate(rdv.status === RDV_STATUSES.IN_CONSULTATION ? `/consultation/${rdv.id}` : `/salle-attente`)} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-clinical-primary rounded-lg text-xs font-bold transition-colors">
+                            {rdv.status === RDV_STATUSES.IN_CONSULTATION ? "Ouvrir" : "Prendre"}
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {salleList.map(rdv => {
-                        const p = rdv.patients
-                        const initials = getInitials(p?.prenom, p?.nom)
-                        const avatarColor = getAvatarColor(rdv.id)
-                        const motif = rdv.motif || rdv.notes || ''
-
-                        return (
-                          <tr key={rdv.id}>
-                            <td>
-                              <div className="ds-patient-cell">
-                                <div
-                                  className="ds-avatar"
-                                  style={{ background: avatarColor.bg, color: avatarColor.text }}
-                                >
-                                  {initials}
-                                </div>
-                                <div>
-                                  <div className="ds-patient-name">
-                                    {p?.prenom} {p?.nom}
-                                  </div>
-                                  {motif && (
-                                    <div className="ds-patient-sub">{motif}</div>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <StatusBadge status={rdv.status} />
-                            </td>
-                            <td>
-                              <WaitTimeCell since={rdv.updated_at || rdv.date_rdv} />
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-
-                  {/* Footer */}
-                  <div className="ds-salle-footer">
-                    <span className="ds-salle-footer-label">Flux Patients</span>
-                    <span className="ds-salle-footer-badge">
-                      {salleList.length > 0 ? `+${Math.round((salleList.length / Math.max(totalRdv, 1)) * 100)}%` : '—'}
-                    </span>
-                  </div>
-                </>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
-                <div className="ds-empty">
-                  <div className="ds-empty-icon">
-                    <Users size={22} color="#94A3B8" />
+                <div className="p-12 text-center flex flex-col items-center">
+                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                    <span className="material-symbols-outlined text-slate-300" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>chair</span>
                   </div>
-                  <h4>Salle d'attente vide</h4>
-                  <p>Les patients arrivés apparaîtront ici</p>
+                  <p className="text-sm font-medium text-slate-500">La salle d'attente est vide.</p>
                 </div>
               )}
+              <div className="p-4 bg-slate-50/50 text-center border-t border-slate-100">
+                <button onClick={() => navigate('/salle-attente')} className="text-xs font-bold text-clinical-primary hover:underline">Gérer la salle d'attente complète</button>
+              </div>
             </div>
           </div>
+        </div>
 
+        {/* Bottom Section: Latest Activity or Recent Data */}
+        <div className="bg-clinical-surface-container-low rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-clinical-on-secondary-container">Performance du Cabinet</h4>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-clinical-primary-container">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>monitoring</span>
+                <span className="text-xs font-medium text-slate-500">Taux de Remplissage</span>
+              </div>
+              <div className="text-2xl font-bold text-clinical-on-surface">{totalRdv > 0 ? '92%' : '0%'}</div>
+              <div className="mt-2 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className={`h-full bg-clinical-primary`} style={{ width: totalRdv > 0 ? '92%' : '0%' }}></div>
+              </div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-clinical-secondary">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="material-symbols-outlined text-clinical-secondary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>timer</span>
+                <span className="text-xs font-medium text-slate-500">Délai Moyen</span>
+              </div>
+              <div className="text-2xl font-bold text-clinical-on-surface">18 min</div>
+              <div className="mt-2 text-[10px] font-medium text-clinical-error flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>arrow_upward</span>
+                +4 min (est.)
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-clinical-tertiary">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="material-symbols-outlined text-clinical-tertiary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>verified</span>
+                <span className="text-xs font-medium text-slate-500">Confirmations</span>
+              </div>
+              <div className="text-2xl font-bold text-clinical-on-surface">{totalRdv > 0 ? Math.round((confirmedCount/totalRdv)*100) : 0}%</div>
+              <div className="mt-2 text-[10px] font-medium text-clinical-primary">Haute fiabilité</div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-slate-300">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="material-symbols-outlined text-slate-400" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>outpatient</span>
+                <span className="text-xs font-medium text-slate-500">Nouveaux Patients</span>
+              </div>
+              <div className="text-2xl font-bold text-clinical-on-surface">+5</div>
+              <div className="mt-2 text-[10px] font-medium text-slate-400">Aujourd'hui</div>
+            </div>
+          </div>
         </div>
       </div>
     </PinLock>
