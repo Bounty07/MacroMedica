@@ -20,6 +20,7 @@ import SettingsPage from './pages/dashboard/SettingsPage'
 
 // Role-specific workspaces
 import ConsultationWorkspace from './pages/dashboard/ConsultationWorkspace'
+import AiScribePage from './pages/AiScribePage'
 
 // Role redirect component based on new requirements
 import { useAppContext } from './context/AppContext'
@@ -98,6 +99,15 @@ function App() {
                 </RoleGuard>
               } 
             />
+            <Route 
+  path="/ai-scribe" 
+  element={
+    <RoleGuard role="docteur">
+      <AiScribePage />
+    </RoleGuard>
+  } 
+/>
+            
 
             {/* Legacy redirect logic from old /doctor or /secretary routes */}
             <Route path="/doctor/*" element={<Navigate to="/" replace />} />
