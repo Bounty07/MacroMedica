@@ -256,7 +256,7 @@ const SecretaireDashboard = memo(() => {
 
         /* GRIDS */
         .sec-layout {
-          display: grid; grid-template-columns: 1fr 380px; gap: 20px;
+          display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
         }
         @media (max-width: 1200px) { .sec-layout { grid-template-columns: 1fr; } }
 
@@ -276,7 +276,7 @@ const SecretaireDashboard = memo(() => {
         .sec-table tr:last-child td { border-bottom: none; }
 
         .sec-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
-        .sec-name { font-size: 13px; font-weight: 700; color: #0F172A; }
+        .sec-name { font-size: 14px; font-weight: 800; color: #0F172A; letter-spacing: -0.3px; }
 
         .sec-btn-action { background: #F1F5F9; color: #475569; border: none; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
         .sec-btn-action:hover { background: #E2E8F0; color: #0F172A; }
@@ -293,7 +293,7 @@ const SecretaireDashboard = memo(() => {
         }
         .sec-rdv-item.active { background: #FFF; border-color: ${ACCENT_LIGHT}; box-shadow: 0 4px 12px rgba(0,79,69,0.04); }
         .sec-rdv-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-        .sec-rdv-item-name { font-size: 13px; font-weight: 800; color: #0F172A; }
+        .sec-rdv-item-name { font-size: 15px; font-weight: 800; color: #0F172A; letter-spacing: -0.3px; }
         .sec-rdv-item-meta { font-size: 12px; color: #64748B; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
         .sec-rdv-item-actions { display: flex; gap: 8px; margin-top: 14px; }
         .sec-rdv-btn { flex: 1; padding: 10px; border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
