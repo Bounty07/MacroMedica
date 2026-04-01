@@ -269,9 +269,9 @@ const SecretaireDashboard = memo(() => {
         .sec-panel-title { font-size: 15px; font-weight: 800; color: #0F172A; display: flex; align-items: center; gap: 8px; }
         .sec-panel-badge { background: ${ACCENT_LIGHT}; color: ${ACCENT}; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; }
 
-        .sec-table { width: 100%; border-collapse: collapse; }
-        .sec-table th { padding: 12px 20px; text-align: left; font-size: 11px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #E9EFF5; background: #FAFBFC; }
-        .sec-table td { padding: 16px 20px; border-bottom: 1px solid #F8FAFB; vertical-align: middle; font-size: 14px; }
+        .sec-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .sec-table th { padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #E9EFF5; background: #FAFBFC; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sec-table td { padding: 12px 14px; border-bottom: 1px solid #F8FAFB; vertical-align: middle; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
         .sec-table tr:hover td { background: #FAFBFC; }
         .sec-table tr:last-child td { border-bottom: none; }
 
@@ -398,14 +398,14 @@ const SecretaireDashboard = memo(() => {
                   <span className="sec-panel-badge">{activeApts.length}</span>
                 </div>
               </div>
-              <div style={{ overflowX: 'auto' }}>
+              <div style={{ overflow: 'hidden' }}>
                 <table className="sec-table">
                   <thead>
                     <tr>
-                      <th>Patient &amp; Assurance</th>
-                      <th>Heure prévue</th>
-                      <th>Attente / Statut</th>
-                      <th style={{ textAlign: 'right' }}>Actions</th>
+                      <th style={{ width: '38%' }}>Patient & Assurance</th>
+                      <th style={{ width: '16%' }}>Heure</th>
+                      <th style={{ width: '24%' }}>Attente / Statut</th>
+                      <th style={{ width: '22%', textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
