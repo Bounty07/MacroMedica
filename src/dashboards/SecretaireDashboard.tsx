@@ -235,14 +235,24 @@ const SecretaireDashboard = memo(() => {
         /* KPIS */
         .sec-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
         .sec-kpi-card {
-          background: #FFF; border-radius: 14px; border: 1px solid #E9EFF5; padding: 20px;
-          display: flex; flex-direction: column; position: relative; overflow: hidden;
+          background: #fff;
+          border: 1px solid #E9EFF5;
+          border-radius: 14px;
+          padding: 22px 24px;
+          display: flex; align-items: center; justify-content: space-between;
+          transition: box-shadow .2s;
         }
-        .sec-kpi-card::before {
-          content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+        .sec-kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .sec-kpi-label { font-size: 12px; font-weight: 600; color: #6B7B8D; margin-bottom: 8px; text-transform: capitalize; letter-spacing: .1px; }
+        .sec-kpi-val { font-size: 32px; font-weight: 800; color: #0F172A; line-height: 1; letter-spacing: -1px; }
+        .sec-kpi-val span { font-size: 16px; font-weight: 500; color: #94A3B8; }
+        .sec-kpi-sub { font-size: 11px; color: #94A3B8; margin-top: 5px; font-weight: 500; }
+        .sec-kpi-sub.green { color: ${ACCENT}; }
+        .sec-kpi-icon {
+          width: 42px; height: 42px; border-radius: 10px;
+          background: ${ACCENT_LIGHT}; color: ${ACCENT};
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
-        .sec-kpi-label { font-size: 11px; font-weight: 700; color: #6B7B8D; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .sec-kpi-val { font-size: 32px; font-weight: 800; color: #0F172A; line-height: 1; font-family: 'JetBrains Mono', monospace; }
 
         /* GRIDS */
         .sec-layout {
@@ -334,29 +344,48 @@ const SecretaireDashboard = memo(() => {
 
           {/* ── KPIs ── */}
           <div className="sec-kpi-row">
-            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
-              <style>{`.sec-kpi-card:nth-child(1)::before { background: #DC2626; }`}</style>
-              <div className="sec-kpi-label">Salle d'attente <Users size={16} color="#DC2626" /></div>
-              <div className="sec-kpi-val" style={{ color: '#DC2626' }}>{activeApts.length}</div>
-              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>patients en ce moment</div>
+            <div className="sec-kpi-card">
+              <div>
+                <div className="sec-kpi-label">Salle d'attente</div>
+                <div className="sec-kpi-val">{activeApts.length}</div>
+                <div className="sec-kpi-sub">patients en ce moment</div>
+              </div>
+              <div className="sec-kpi-icon">
+                <Users size={20} />
+              </div>
             </div>
-            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
-              <style>{`.sec-kpi-card:nth-child(2)::before { background: #2563EB; }`}</style>
-              <div className="sec-kpi-label">Consultation <Stethoscope size={16} color="#2563EB" /></div>
-              <div className="sec-kpi-val" style={{ color: '#2563EB' }}>{enConsult.length}</div>
-              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>en cours dans les salles</div>
+            
+            <div className="sec-kpi-card">
+              <div>
+                <div className="sec-kpi-label">Consultation</div>
+                <div className="sec-kpi-val">{enConsult.length}</div>
+                <div className="sec-kpi-sub">en cours dans les salles</div>
+              </div>
+              <div className="sec-kpi-icon">
+                <Stethoscope size={20} />
+              </div>
             </div>
-            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
-              <style>{`.sec-kpi-card:nth-child(3)::before { background: #16A34A; }`}</style>
-              <div className="sec-kpi-label">RDV du jour <CheckCircle size={16} color="#16A34A" /></div>
-              <div className="sec-kpi-val" style={{ color: '#16A34A' }}>{completedApts.length}<span style={{ fontSize: 16, color: '#94A3B8' }}>/{totalRdvDuJour}</span></div>
-              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>patients terminés</div>
+            
+            <div className="sec-kpi-card">
+              <div>
+                <div className="sec-kpi-label">RDV du jour</div>
+                <div className="sec-kpi-val">{completedApts.length} <span>/ {totalRdvDuJour}</span></div>
+                <div className="sec-kpi-sub">patients terminés</div>
+              </div>
+              <div className="sec-kpi-icon">
+                <CheckCircle size={20} />
+              </div>
             </div>
-            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
-              <style>{`.sec-kpi-card:nth-child(4)::before { background: #0D9488; }`}</style>
-              <div className="sec-kpi-label">Revenu du jour <CreditCard size={16} color="#0D9488" /></div>
-              <div className="sec-kpi-val" style={{ color: '#0D9488', fontSize: 28 }}>{fmtMAD(revenuJour)}</div>
-              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>encaissé aujourd'hui</div>
+            
+            <div className="sec-kpi-card">
+              <div>
+                <div className="sec-kpi-label">Revenu du jour</div>
+                <div className="sec-kpi-val" style={{ fontSize: 28 }}>{fmtMAD(revenuJour)}</div>
+                <div className="sec-kpi-sub green">encaissé aujourd'hui</div>
+              </div>
+              <div className="sec-kpi-icon">
+                <CreditCard size={20} />
+              </div>
             </div>
           </div>
 
