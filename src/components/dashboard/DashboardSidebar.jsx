@@ -11,7 +11,8 @@ import {
   UsersRound,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Bot
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { getSidebarForRole } from '../../lib/sidebarConfig'
@@ -31,6 +32,7 @@ const iconMap = {
   'settings-2': Settings2,
   stethoscope: Stethoscope,
   'users-round': UsersRound,
+  'bot': Bot,
 }
 
 const CustomHoverTooltip = ({ children, content }) => (
