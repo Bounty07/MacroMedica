@@ -578,7 +578,6 @@ export default function StatisticsPage() {
 
             {prochainRdv ? (
               <div className="db-patient-card">
-                <span className="db-approche-badge">EN APPROCHE</span>
 
                 {/* Identity */}
                 <div className="db-patient-identity">
