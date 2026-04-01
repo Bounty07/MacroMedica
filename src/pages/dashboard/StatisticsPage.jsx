@@ -1,34 +1,26 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppContext } from '../../context/AppContext'
 import { RDV_STATUSES, isValidTransition } from '../../lib/workflow'
 import { supabase } from '../../lib/supabase'
 import PinLock from '../../components/common/PinLock'
 import {
-  Users, CalendarDays, Receipt, Plus, Clock, MoreHorizontal,
-  ChevronRight, XCircle, ArrowRightToLine
+  CalendarPlus, Bell, Trash2, Phone, MoreHorizontal,
+  PlayCircle, FileText, StickyNote, ChevronRight, Clock,
+  Stethoscope, User, Activity, Calendar
 } from 'lucide-react'
 
-/* ─── Helpers ─── */
+/* ─── Constants ─── */
 const TZ = 'Africa/Casablanca'
+const ACCENT = '#004F45'
+const ACCENT_LIGHT = '#E6F4F1'
 
-function getGreeting() {
-  const h = new Date().getHours()
-  if (h < 12) return 'Bonjour'
-  if (h < 18) return 'Bon après-midi'
-  return 'Bonsoir'
-}
-
-function formatDateFr() {
+/* ─── Date helpers ─── */
+function formatDateLong() {
   const now = new Date()
   const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']
   const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
-  const day = days[now.getDay()]
-  const d = now.getDate()
-  const month = months[now.getMonth()]
-  const year = now.getFullYear()
-  const time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: TZ })
-  return `${day} ${d} ${month} ${year} · ${time}`
+  return `le ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
 }
 
 function formatTime(iso) {
@@ -38,43 +30,36 @@ function formatTime(iso) {
   return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: TZ })
 }
 
-function formatTimeAmPm(iso) {
-  if (!iso) return '--:-- --'
+function formatDateShort(iso) {
+  if (!iso) return '--'
   const d = new Date(iso)
-  if (isNaN(d.getTime())) return '--:-- --'
-  let h = d.getHours()
-  const m = String(d.getMinutes()).padStart(2, '0')
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  h = h % 12 || 12
-  return `${h}:${m} ${ampm}`
+  if (isNaN(d.getTime())) return '--'
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: TZ })
 }
 
+/* ─── Avatar helpers ─── */
+const AVATAR_PALETTES = [
+  { bg: '#D1FAE5', text: '#065F46' },
+  { bg: '#DBEAFE', text: '#1E40AF' },
+  { bg: '#FEE2E2', text: '#991B1B' },
+  { bg: '#FEF3C7', text: '#92400E' },
+  { bg: '#EDE9FE', text: '#4C1D95' },
+  { bg: '#FCE7F3', text: '#831843' },
+  { bg: '#CFFAFE', text: '#164E63' },
+]
+function getAvatarColor(id) {
+  const idx = id ? String(id).charCodeAt(0) % AVATAR_PALETTES.length : 0
+  return AVATAR_PALETTES[idx]
+}
 const getInitials = (prenom, nom) =>
   `${(prenom?.[0] || '').toUpperCase()}${(nom?.[0] || '').toUpperCase()}`
 
-const AVATAR_COLORS = [
-  { bg: '#EEF2FF', text: '#4F46E5' },
-  { bg: '#FEF3C7', text: '#D97706' },
-  { bg: '#DCFCE7', text: '#16A34A' },
-  { bg: '#FEE2E2', text: '#DC2626' },
-  { bg: '#E0E7FF', text: '#4338CA' },
-  { bg: '#FCE7F3', text: '#DB2777' },
-  { bg: '#CFFAFE', text: '#0891B2' },
-]
-function getAvatarColor(id) {
-  const idx = id ? String(id).charCodeAt(0) % AVATAR_COLORS.length : 0
-  return AVATAR_COLORS[idx]
-}
-
-/* ─── Live Wait Time Hook ─── */
-function useLiveWaitMinutes(since) {
+/* ─── Live wait time ─── */
+function useLiveWait(since) {
   const [mins, setMins] = useState(0)
   useEffect(() => {
     if (!since) return
-    const update = () => {
-      const diff = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60000))
-      setMins(diff)
-    }
+    const update = () => setMins(Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60000)))
     update()
     const iv = setInterval(update, 30000)
     return () => clearInterval(iv)
@@ -82,393 +67,667 @@ function useLiveWaitMinutes(since) {
   return mins
 }
 
-/* ─── Live Clock ─── */
+/* ─── Live clock ─── */
 function useLiveClock() {
-  const [dateStr, setDateStr] = useState(formatDateFr)
+  const [d, setD] = useState(formatDateLong)
   useEffect(() => {
-    const iv = setInterval(() => setDateStr(formatDateFr()), 30000)
+    const iv = setInterval(() => setD(formatDateLong()), 60000)
     return () => clearInterval(iv)
   }, [])
-  return dateStr
+  return d
 }
 
-/* ─── Wait Time Cell (individual re-render) ─── */
-function WaitTimeCell({ since }) {
-  const mins = useLiveWaitMinutes(since)
-  if (mins === 0) return <span className="ds-wait-label">IMMÉDIAT</span>
-  return <span className="ds-wait-label">{mins} min</span>
-}
-
-/* ═══════════════════════════════════════════════════════════
-   STATUS BADGE
-   ═══════════════════════════════════════════════════════════ */
-const STATUS_CONFIG = {
-  [RDV_STATUSES.IN_CONSULTATION]: { label: 'EN COURS', bg: '#DBEAFE', text: '#2563EB' },
-  [RDV_STATUSES.ARRIVED]:        { label: 'ARRIVÉ',   bg: '#D1FAE5', text: '#059669' },
-  [RDV_STATUSES.SCHEDULED]:      { label: 'ATTENTE',  bg: '#FEF3C7', text: '#D97706' },
-  [RDV_STATUSES.COMPLETED]:      { label: 'TERMINÉ',  bg: '#E0E7FF', text: '#4F46E5' },
-  [RDV_STATUSES.ABSENT]:         { label: 'ABSENT',   bg: '#FEE2E2', text: '#DC2626' },
-}
-
-function StatusBadge({ status }) {
-  // Check for urgent flag
-  const isUrgent = status === 'urgent'
-  if (isUrgent) {
+/* ───────────────────────────────────────────────
+   WAIT TIME CELL
+─────────────────────────────────────────────── */
+function WaitCell({ rdv }) {
+  const mins = useLiveWait(rdv.updated_at || rdv.date_rdv)
+  const isLate = rdv.status === RDV_STATUSES.SCHEDULED && mins > 15
+  if (isLate) {
     return (
-      <span
-        className="ds-status-badge"
-        style={{ background: '#DC2626', color: '#FFFFFF' }}
-      >
-        URGENT
-      </span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>Retard</div>
+        <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Prévu {formatTime(rdv.date_rdv)}</div>
+      </div>
     )
   }
-  const cfg = STATUS_CONFIG[status] || { label: status, bg: '#F1F5F9', text: '#64748B' }
   return (
-    <span
-      className="ds-status-badge"
-      style={{ background: cfg.bg, color: cfg.text }}
-    >
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+        {String(Math.floor(mins / 60)).padStart(2, '0')}:{String(mins % 60).padStart(2, '0')} min
+      </div>
+      <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+        Arrivé à {formatTime(rdv.updated_at || rdv.date_rdv)}
+      </div>
+    </div>
+  )
+}
+
+/* ───────────────────────────────────────────────
+   STATUS BADGE
+─────────────────────────────────────────────── */
+function StatusBadge({ status }) {
+  const map = {
+    [RDV_STATUSES.IN_CONSULTATION]: { label: 'EN COURS',   bg: '#DBEAFE', text: '#1D4ED8' },
+    [RDV_STATUSES.ARRIVED]:         { label: 'EN ATTENTE', bg: '#D1FAE5', text: '#047857' },
+    [RDV_STATUSES.SCHEDULED]:       { label: 'EN RETARD',  bg: '#FEE2E2', text: '#B91C1C' },
+    [RDV_STATUSES.COMPLETED]:       { label: 'TERMINÉ',    bg: '#E0E7FF', text: '#4338CA' },
+    [RDV_STATUSES.ABSENT]:          { label: 'ABSENT',     bg: '#FEE2E2', text: '#B91C1C' },
+  }
+  const cfg = map[status] || { label: status?.toUpperCase() || '—', bg: '#F1F5F9', text: '#64748B' }
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 800, letterSpacing: '0.6px',
+      padding: '4px 10px', borderRadius: 6,
+      background: cfg.bg, color: cfg.text,
+      textTransform: 'uppercase', whiteSpace: 'nowrap'
+    }}>
       {cfg.label}
     </span>
   )
 }
 
-/* ═══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════
    MAIN DASHBOARD
-   ═══════════════════════════════════════════════════════════ */
+═══════════════════════════════════════════════ */
 export default function StatisticsPage() {
   const navigate = useNavigate()
-  const {
-    profile, rdvList, consultations, patients,
-    openGlobalModal, notify, refreshRdv
-  } = useAppContext()
+  const { profile, rdvList, consultations, openGlobalModal, notify } = useAppContext()
 
   const dateStr = useLiveClock()
   const doctorName = profile?.nom_complet || 'Docteur'
+  const [salleTab, setSalleTab] = useState('actifs') // 'actifs' | 'tous'
 
-  /* ── Derived data ── */
+  /* ── Derived slices ── */
   const enAttente = useMemo(() =>
     rdvList.filter(r => r.status === RDV_STATUSES.ARRIVED)
       .sort((a, b) => new Date(a.updated_at || a.date_rdv) - new Date(b.updated_at || b.date_rdv)),
-    [rdvList]
-  )
+    [rdvList])
 
   const enConsultation = useMemo(() =>
     rdvList.filter(r => r.status === RDV_STATUSES.IN_CONSULTATION),
-    [rdvList]
-  )
+    [rdvList])
 
   const confirmes = useMemo(() =>
     rdvList.filter(r => r.status === RDV_STATUSES.SCHEDULED)
       .sort((a, b) => new Date(a.date_rdv) - new Date(b.date_rdv)),
-    [rdvList]
-  )
+    [rdvList])
 
-  // Next scheduled patient (first confirmed RDV)
-  const prochainRdv = confirmes[0] || null
+  const prochainRdv    = confirmes[0] || null
   const prochainPatient = prochainRdv?.patients || null
 
-  // Stats
-  const salleCount = enAttente.length + enConsultation.length
-  const confirmedCount = rdvList.filter(r => r.status === RDV_STATUSES.SCHEDULED || r.status === RDV_STATUSES.ARRIVED || r.status === RDV_STATUSES.IN_CONSULTATION).length
+  /* ── Stats ── */
+  const salleCount    = enAttente.length + enConsultation.length
+  const confirmedCount = rdvList.filter(r =>
+    [RDV_STATUSES.SCHEDULED, RDV_STATUSES.ARRIVED, RDV_STATUSES.IN_CONSULTATION].includes(r.status)
+  ).length
   const totalRdv = rdvList.length
 
   const revenuJour = useMemo(() => {
     const today = new Date().toLocaleDateString('fr-CA', { timeZone: TZ })
     return consultations
       .filter(c => c.statut === 'paye' && c.date_consult?.startsWith(today))
-      .reduce((sum, c) => sum + (c.montant || 0), 0)
+      .reduce((s, c) => s + (c.montant || 0), 0)
   }, [consultations])
 
-  // Waiting room list: arrived + in consultation
-  const salleList = useMemo(() => {
-    const combined = [
-      ...enConsultation.map(r => ({ ...r, _order: 0 })),
-      ...enAttente.map(r => ({ ...r, _order: 1 })),
-    ]
-    return combined
-  }, [enAttente, enConsultation])
+  /* ── Salle d'attente Table List ── */
+  const activeList = useMemo(() => [
+    ...enConsultation.map(r => ({ ...r, _order: 0 })),
+    ...enAttente.map(r => ({ ...r, _order: 1 })),
+  ], [enAttente, enConsultation])
 
-  /* ── Status transition ── */
-  const transitionStatus = async (rdvId, targetStatus) => {
-    const { data: current, error: fetchErr } = await supabase
-      .from('rdv').select('status').eq('id', rdvId).single()
-    if (fetchErr || !current) {
-      notify({ title: 'Erreur', description: 'Impossible de lire le RDV', tone: 'error' })
-      return false
+  const salleList = salleTab === 'actifs' ? activeList : rdvList.filter(r =>
+    [RDV_STATUSES.ARRIVED, RDV_STATUSES.IN_CONSULTATION, RDV_STATUSES.COMPLETED, RDV_STATUSES.ABSENT].includes(r.status)
+  )
+
+  /* ── Actions ── */
+  const transitionStatus = useCallback(async (rdvId, target) => {
+    const { data: cur, error: e } = await supabase.from('rdv').select('status').eq('id', rdvId).single()
+    if (e || !cur) { notify({ title: 'Erreur', description: 'RDV introuvable', tone: 'error' }); return false }
+    try { isValidTransition(cur.status, target) } catch (err) {
+      notify({ title: 'Transition invalide', description: err.message, tone: 'error' }); return false
     }
-    try { isValidTransition(current.status, targetStatus) }
-    catch (err) {
-      notify({ title: 'Transition invalide', description: err.message, tone: 'error' })
-      return false
-    }
-    const { error } = await supabase.from('rdv').update({ status: targetStatus }).eq('id', rdvId)
-    if (error) {
-      notify({ title: 'Erreur DB', description: error.message, tone: 'error' })
-      return false
-    }
+    const { error } = await supabase.from('rdv').update({ status: target }).eq('id', rdvId)
+    if (error) { notify({ title: 'Erreur DB', description: error.message, tone: 'error' }); return false }
     return true
+  }, [notify])
+
+  const demarrerConsultation = async () => {
+    if (!prochainRdv) return
+    const ok = await transitionStatus(prochainRdv.id, RDV_STATUSES.IN_CONSULTATION)
+    if (ok) notify({ title: 'Consultation démarrée', description: `${prochainPatient?.prenom} ${prochainPatient?.nom} est maintenant en consultation.` })
   }
 
   const ajouterSalle = async () => {
     if (!prochainRdv) return
     const ok = await transitionStatus(prochainRdv.id, RDV_STATUSES.ARRIVED)
-    if (ok) {
-      notify({ title: 'Patient ajouté', description: `${prochainPatient?.prenom} ${prochainPatient?.nom} est en salle d'attente.` })
-    }
+    if (ok) notify({ title: 'Patient ajouté', description: `${prochainPatient?.prenom} ${prochainPatient?.nom} est en salle d'attente.` })
   }
 
-  const annulerRdv = async () => {
-    if (!prochainRdv) return
-    const { error } = await supabase.from('rdv').update({ status: 'absent' }).eq('id', prochainRdv.id)
-    if (error) {
-      notify({ title: 'Erreur', description: error.message, tone: 'error' })
-    } else {
-      notify({ title: 'RDV annulé', description: `Le rendez-vous a été marqué comme absent.` })
-    }
+  /* ── Patient gender prefix ── */
+  const civility = (sexe) => sexe === 'F' ? 'Mme.' : 'M.'
+  const age = (dob) => {
+    if (!dob) return null
+    const diff = new Date().getFullYear() - new Date(dob).getFullYear()
+    return diff > 0 && diff < 130 ? diff : null
   }
 
+  /* =========================================================
+     RENDER
+  ========================================================= */
   return (
     <PinLock>
-      <div className="p-8 space-y-8 flex-1 overflow-y-auto custom-scrollbar font-['Inter']">
-        {/* Greeting and Quick Actions */}
-        <div className="flex justify-between items-end">
+      <style>{`
+        .db-root {
+          font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+          padding: 32px 36px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+          min-height: 100%;
+          background: #F8FAFB;
+        }
+
+        /* ─ HEADER ─ */
+        .db-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          margin-bottom: 4px;
+        }
+        .db-greeting { font-size: 28px; font-weight: 800; color: #0F172A; line-height: 1.2; letter-spacing: -0.5px; }
+        .db-subline  { font-size: 13px; color: #94A3B8; margin-top: 4px; font-weight: 400; }
+        .db-btn-rdv  {
+          display: inline-flex; align-items: center; gap: 8px;
+          background: ${ACCENT}; color: #fff;
+          font-weight: 700; font-size: 13px;
+          padding: 11px 22px; border-radius: 10px; border: none; cursor: pointer;
+          transition: opacity .15s; box-shadow: 0 4px 14px rgba(0,79,69,0.25);
+          white-space: nowrap;
+        }
+        .db-btn-rdv:hover { opacity: 0.88; }
+
+        /* ─ KPI ROW ─ */
+        .db-kpi-row {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+        }
+        @media(max-width:900px) { .db-kpi-row { grid-template-columns: 1fr; } }
+        .db-kpi-card {
+          background: #fff;
+          border: 1px solid #E9EFF5;
+          border-radius: 14px;
+          padding: 22px 24px;
+          display: flex; align-items: center; justify-content: space-between;
+          transition: box-shadow .2s;
+        }
+        .db-kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .db-kpi-label { font-size: 12px; font-weight: 600; color: #6B7B8D; margin-bottom: 8px; text-transform: capitalize; letter-spacing: .1px; }
+        .db-kpi-value { font-size: 36px; font-weight: 800; color: #0F172A; line-height: 1; letter-spacing: -1px; }
+        .db-kpi-value span { font-size: 18px; font-weight: 500; color: #94A3B8; }
+        .db-kpi-sub   { font-size: 11px; color: #94A3B8; margin-top: 5px; font-weight: 500; }
+        .db-kpi-sub.green { color: ${ACCENT}; }
+        .db-kpi-icon  {
+          width: 42px; height: 42px; border-radius: 10px;
+          background: ${ACCENT_LIGHT}; color: ${ACCENT};
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+
+        /* ─ MAIN GRID ─ */
+        .db-main-grid {
+          display: grid;
+          grid-template-columns: 390px 1fr;
+          gap: 20px;
+          align-items: start;
+        }
+        @media(max-width:1100px) { .db-main-grid { grid-template-columns: 1fr; } }
+
+        /* ─ PROCHAIN PATIENT ─ */
+        .db-section-title {
+          font-size: 13px; font-weight: 700; color: #0F172A;
+          display: flex; align-items: center; gap: 8px;
+          margin-bottom: 12px;
+        }
+        .db-section-title svg { color: ${ACCENT}; }
+
+        .db-patient-card {
+          background: #fff;
+          border: 1px solid #E9EFF5;
+          border-radius: 16px;
+          padding: 24px;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+        .db-approche-badge {
+          position: absolute;
+          top: 20px; right: 20px;
+          background: #D1FAE5; color: #047857;
+          font-size: 9px; font-weight: 800; letter-spacing: .8px;
+          padding: 4px 10px; border-radius: 5px; text-transform: uppercase;
+        }
+
+        /* Patient identity row */
+        .db-patient-identity { display: flex; align-items: center; gap: 16px; }
+        .db-patient-avatar {
+          width: 56px; height: 56px; border-radius: 50%;
+          background: ${ACCENT_LIGHT};
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0; position: relative;
+        }
+        .db-patient-avatar-check {
+          position: absolute; bottom: 0; right: -2px;
+          width: 18px; height: 18px; border-radius: 50%;
+          background: #10B981; border: 2px solid #fff;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .db-patient-name { font-size: 20px; font-weight: 800; color: #0F172A; line-height: 1.15; }
+        .db-patient-meta { font-size: 12px; color: #94A3B8; margin-top: 3px; font-weight: 500; }
+        .db-patient-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .db-tag { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 5px; text-transform: uppercase; letter-spacing: .3px; }
+        .db-tag-gray { background: #F1F5F9; color: #64748B; }
+        .db-tag-red  { background: #FEE2E2; color: '#B91C1C'; color: #B91C1C; }
+
+        /* Info boxes */
+        .db-info-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .db-info-box {
+          background: #F8FAFB; border-radius: 10px; padding: 12px;
+          border: 1px solid #EEF2F7;
+        }
+        .db-info-box-label {
+          font-size: 9px; font-weight: 800; color: #94A3B8;
+          text-transform: uppercase; letter-spacing: 1px;
+          margin-bottom: 6px; display: flex; align-items: center; gap: 5px;
+        }
+        .db-info-box-value { font-size: 12px; font-weight: 600; color: #334155; }
+        .db-info-box-sub   { font-size: 11px; color: #94A3B8; margin-top: 2px; }
+
+        /* CTA button */
+        .db-btn-demarrer {
+          width: 100%; padding: 16px;
+          background: ${ACCENT}; color: #fff;
+          font-size: 13px; font-weight: 800; letter-spacing: .5px;
+          border: none; border-radius: 10px; cursor: pointer;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          transition: opacity .15s; text-transform: uppercase;
+          box-shadow: 0 4px 14px rgba(0,79,69,0.3);
+        }
+        .db-btn-demarrer:hover { opacity: .88; }
+
+        /* Secondary actions */
+        .db-patient-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .db-btn-sec {
+          padding: 10px; border-radius: 8px;
+          background: #F8FAFB; border: 1px solid #E9EFF5;
+          font-size: 12px; font-weight: 600; color: #475569; cursor: pointer;
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+          transition: border-color .15s, color .15s;
+        }
+        .db-btn-sec:hover { border-color: ${ACCENT}; color: ${ACCENT}; }
+
+        /* Empty patient */
+        .db-patient-empty {
+          background: #fff; border: 2px dashed #E2E8F0;
+          border-radius: 16px; padding: 48px 32px; text-align: center;
+          display: flex; flex-direction: column; align-items: center; gap: 12px;
+        }
+        .db-empty-icon {
+          width: 52px; height: 52px; border-radius: 16px;
+          background: #F1F5F9; display: flex; align-items: center; justify-content: center;
+        }
+        .db-patient-empty h4 { font-size: 15px; font-weight: 700; color: #475569; margin: 0; }
+        .db-patient-empty p  { font-size: 13px; color: #94A3B8; margin: 0; }
+
+        /* ─ SALLE D'ATTENTE ─ */
+        .db-salle-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 12px;
+        }
+        .db-tabs { display: flex; gap: 6px; }
+        .db-tab {
+          font-size: 11px; font-weight: 700; padding: 5px 14px;
+          border-radius: 20px; border: none; cursor: pointer; letter-spacing: .3px;
+          transition: background .15s, color .15s;
+        }
+        .db-tab-active  { background: ${ACCENT}; color: #fff; }
+        .db-tab-inactive { background: #F1F5F9; color: #64748B; }
+
+        .db-salle-card {
+          background: #fff; border: 1px solid #E9EFF5; border-radius: 16px; overflow: hidden;
+        }
+        .db-salle-table { width: 100%; border-collapse: collapse; }
+        .db-salle-table thead th {
+          font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+          color: #94A3B8; padding: 14px 18px 10px; text-align: left;
+          border-bottom: 1px solid #F1F5F9;
+        }
+        .db-salle-table tbody tr {
+          border-bottom: 1px solid #F8FAFB; transition: background .12s;
+        }
+        .db-salle-table tbody tr:last-child { border-bottom: none; }
+        .db-salle-table tbody tr:hover { background: #FAFBFC; }
+        .db-salle-table td { padding: 14px 18px; vertical-align: middle; }
+
+        .db-row-avatar {
+          width: 34px; height: 34px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 11px; font-weight: 800; flex-shrink: 0;
+        }
+        .db-row-name  { font-size: 13px; font-weight: 700; color: #0F172A; }
+        .db-row-motif { font-size: 10px; color: #94A3B8; font-weight: 600; text-transform: uppercase; margin-top: 2px; letter-spacing: .3px; }
+
+        .db-action-btn {
+          width: 30px; height: 30px; border-radius: 7px;
+          background: #F8FAFB; border: 1px solid #E9EFF5;
+          display: inline-flex; align-items: center; justify-content: center;
+          cursor: pointer; color: #64748B; transition: all .15s;
+        }
+        .db-action-btn:hover { background: ${ACCENT_LIGHT}; color: ${ACCENT}; border-color: ${ACCENT}; }
+        .db-action-btn.danger:hover { background: #FEE2E2; color: #B91C1C; border-color: #FECACA; }
+
+        .db-salle-footer {
+          padding: 12px 18px; border-top: 1px solid #F1F5F9;
+          background: #FAFBFC; text-align: center;
+        }
+        .db-salle-footer button {
+          font-size: 11px; font-weight: 800; color: ${ACCENT};
+          background: none; border: none; cursor: pointer; letter-spacing: .5px;
+          text-transform: uppercase;
+        }
+        .db-salle-footer button:hover { text-decoration: underline; }
+
+        .db-salle-empty {
+          padding: 40px 24px; text-align: center; color: #94A3B8;
+          display: flex; flex-direction: column; align-items: center; gap: 10px;
+        }
+        .db-salle-empty h4 { font-size: 14px; font-weight: 600; color: #64748B; margin: 0; }
+        .db-salle-empty p  { font-size: 12px; margin: 0; }
+      `}</style>
+
+      <div className="db-root">
+
+        {/* ═══ HEADER ═══ */}
+        <div className="db-header">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-clinical-on-surface">Bonjour, Dr. {doctorName.split(' ').pop()}</h2>
-            <p className="text-clinical-on-secondary-container mt-1">Voici le point sur votre activité aujourd'hui, {dateStr.split('·')[0].trim()}.</p>
+            <div className="db-greeting">Bonjour, {doctorName}</div>
+            <div className="db-subline">Voici le point sur votre activité aujourd'hui, {dateStr}.</div>
           </div>
-          <button 
-            onClick={() => openGlobalModal('appointment')}
-            className="bg-clinical-primary hover:bg-clinical-primary-container text-white px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-clinical-primary/10 active:scale-95"
-          >
-            <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>calendar_add_on</span>
+          <button className="db-btn-rdv" onClick={() => openGlobalModal('appointment')}>
+            <CalendarPlus size={16} />
             Nouveau RDV
           </button>
         </div>
 
-        {/* Bento Grid Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* KPI: Salle d'attente */}
-          <div className="bg-clinical-surface-container-low p-6 rounded-xl border-l-4 border-clinical-primary relative overflow-hidden group">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-clinical-on-secondary-container tracking-wide">Salle d'attente</p>
-                <h3 className="text-4xl font-bold mt-2 text-clinical-primary">{salleCount}</h3>
-                <p className="text-xs text-clinical-on-surface-variant mt-2">patients actuellement en attente</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg shadow-sm">
-                <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>chair</span>
-              </div>
+        {/* ═══ KPI ROW ═══ */}
+        <div className="db-kpi-row">
+          {/* Salle d'attente */}
+          <div className="db-kpi-card">
+            <div>
+              <div className="db-kpi-label">Salle d'attente</div>
+              <div className="db-kpi-value">{salleCount}</div>
+              <div className="db-kpi-sub">patients actuellement en attente</div>
+            </div>
+            <div className="db-kpi-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 9V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v2H6v-2a2 2 0 0 0-4 0Z"/><line x1="6" x2="6" y1="19" y2="22"/><line x1="18" x2="18" y1="19" y2="22"/>
+              </svg>
             </div>
           </div>
-          {/* KPI: RDV Du Jour */}
-          <div className="bg-clinical-surface-container-low p-6 rounded-xl border-l-4 border-clinical-secondary relative overflow-hidden group">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-clinical-on-secondary-container tracking-wide">RDV Du Jour</p>
-                <h3 className="text-4xl font-bold mt-2 text-clinical-secondary">{confirmedCount} <span className="text-lg text-clinical-secondary/70">/ {totalRdv}</span></h3>
-                <p className="text-xs text-clinical-on-surface-variant mt-2 font-medium">{totalRdv > 0 ? Math.round((confirmedCount/totalRdv)*100) : 0}% de confirmations reçues</p>
+
+          {/* RDV Du Jour */}
+          <div className="db-kpi-card">
+            <div>
+              <div className="db-kpi-label">RDV Du Jour</div>
+              <div className="db-kpi-value">
+                {confirmedCount} <span>/ {totalRdv}</span>
               </div>
-              <div className="p-3 bg-white rounded-lg shadow-sm">
-                <span className="material-symbols-outlined text-clinical-secondary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>event_available</span>
+              <div className="db-kpi-sub">
+                {totalRdv > 0 ? Math.round((confirmedCount / totalRdv) * 100) : 0}% de confirmations reçues
               </div>
             </div>
+            <div className="db-kpi-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/>
+              </svg>
+            </div>
           </div>
-          {/* KPI: Revenu Du Jour */}
-          <div className="bg-clinical-surface-container-low p-6 rounded-xl border-l-4 border-clinical-tertiary relative overflow-hidden group">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-clinical-on-secondary-container tracking-wide">Revenu Du Jour</p>
-                <h3 className="text-4xl font-bold mt-2 text-clinical-on-surface">{revenuJour.toLocaleString('fr-FR')} <span className="text-xl">MAD</span></h3>
-                <p className="text-xs text-clinical-on-surface-variant mt-2 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[14px] text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>trending_up</span>
-                  À jour pour aujourd'hui
-                </p>
+
+          {/* Revenu Du Jour */}
+          <div className="db-kpi-card">
+            <div>
+              <div className="db-kpi-label">Revenu Du Jour</div>
+              <div className="db-kpi-value">
+                {revenuJour.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span>MAD</span>
               </div>
-              <div className="p-3 bg-white rounded-lg shadow-sm">
-                <span className="material-symbols-outlined text-clinical-tertiary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>payments</span>
+              <div className="db-kpi-sub green">
+                ↗ À jour pour aujourd'hui
               </div>
+            </div>
+            <div className="db-kpi-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>
+              </svg>
             </div>
           </div>
         </div>
 
-        {/* Main Content Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Next Patient / Focus Card */}
-          <div className="lg:col-span-4 space-y-6">
-            <h4 className="text-lg font-semibold text-clinical-on-surface flex items-center gap-2">
-              <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>medical_information</span>
+        {/* ═══ MAIN GRID ═══ */}
+        <div className="db-main-grid">
+
+          {/* ─── LEFT: Prochain Patient ─── */}
+          <div>
+            <div className="db-section-title">
+              <Stethoscope size={15} />
               Prochain Patient
-            </h4>
-            
+            </div>
+
             {prochainRdv ? (
-              <div className="bg-clinical-surface-container-lowest border border-slate-100 rounded-xl p-6 flex flex-col shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4">
-                  <span className="px-2 py-1 bg-clinical-primary/10 text-clinical-primary text-[10px] font-bold rounded uppercase">Confirmé</span>
-                </div>
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 bg-clinical-surface-container-low rounded-full flex items-center justify-center border-2 border-clinical-primary/20">
-                    <span className="material-symbols-outlined text-3xl text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>person</span>
+              <div className="db-patient-card">
+                <span className="db-approche-badge">EN APPROCHE</span>
+
+                {/* Identity */}
+                <div className="db-patient-identity">
+                  <div className="db-patient-avatar">
+                    <User size={26} color={ACCENT} />
+                    <div className="db-patient-avatar-check">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </div>
                   </div>
                   <div>
-                    <h5 className="text-clinical-on-surface font-bold text-lg leading-tight">{prochainPatient?.prenom} {prochainPatient?.nom}</h5>
-                    <p className="text-xs font-semibold text-slate-500">{prochainPatient?.telephone || 'Dossier complet'}</p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-slate-400 text-sm" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>schedule</span>
+                    <div className="db-patient-name">
+                      {civility(prochainPatient?.sexe)} {prochainPatient?.prenom} {prochainPatient?.nom}
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Heure du RDV</p>
-                      <p className="text-sm font-semibold text-clinical-on-surface">{formatTime(prochainRdv.date_rdv)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-slate-400 text-sm" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>medical_services</span>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Type d'acte</p>
-                      <p className="text-sm font-semibold text-clinical-on-surface">{prochainRdv.notes || prochainRdv.motif || 'Consultation de suivi'}</p>
+                    <div className="db-patient-meta">
+                      {age(prochainPatient?.date_naissance) && `${age(prochainPatient.date_naissance)} ans · `}
+                      {prochainPatient?.telephone || `RDV à ${formatTime(prochainRdv.date_rdv)}`}
                     </div>
                   </div>
                 </div>
-                <button onClick={ajouterSalle} className="mt-8 w-full py-3 bg-clinical-primary text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>play_arrow</span>
-                  Marquer comme arrivé
+
+                {/* Tags */}
+                {(prochainPatient?.groupe_sanguin || prochainPatient?.antecedents) && (
+                  <div className="db-patient-tags">
+                    {prochainPatient.groupe_sanguin && (
+                      <span className="db-tag db-tag-gray">GROUPE {prochainPatient.groupe_sanguin}</span>
+                    )}
+                    {prochainPatient.antecedents && (
+                      <span className="db-tag db-tag-red">{prochainPatient.antecedents.slice(0, 30).toUpperCase()}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Info boxes */}
+                <div className="db-info-boxes">
+                  <div className="db-info-box">
+                    <div className="db-info-box-label">
+                      <Activity size={10} />
+                      Constantes
+                    </div>
+                    <div className="db-info-box-value">
+                      {prochainPatient?.tension || '—'}
+                    </div>
+                    <div className="db-info-box-sub">
+                      {prochainPatient?.poids ? `Poids: ${prochainPatient.poids} kg` : 'Non renseignées'}
+                    </div>
+                  </div>
+                  <div className="db-info-box">
+                    <div className="db-info-box-label">
+                      <Calendar size={10} />
+                      Heure du RDV
+                    </div>
+                    <div className="db-info-box-value">{formatTime(prochainRdv.date_rdv)}</div>
+                    <div className="db-info-box-sub">
+                      {prochainRdv.notes || prochainRdv.motif || 'Consultation générale'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* CTA */}
+                <button className="db-btn-demarrer" onClick={demarrerConsultation}>
+                  <PlayCircle size={17} />
+                  Démarrer la Consultation
                 </button>
-                <button onClick={() => navigate(`/patients/${prochainPatient?.id}`)} className="mt-3 text-slate-400 font-medium text-xs hover:text-clinical-primary transition-colors">Voir l'historique médical</button>
+
+                {/* Secondary actions */}
+                <div className="db-patient-actions">
+                  <button className="db-btn-sec" onClick={() => openGlobalModal('patient')}>
+                    <StickyNote size={13} />
+                    Ajouter Note
+                  </button>
+                  <button className="db-btn-sec" onClick={() => prochainPatient?.id && navigate(`/patients/${prochainPatient.id}`)}>
+                    <FileText size={13} />
+                    Voir Dossier
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="bg-clinical-surface-container-lowest border border-slate-100 rounded-xl p-8 flex flex-col items-center justify-center text-center shadow-sm">
-                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                  <span className="material-symbols-outlined text-3xl text-slate-300" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>free_cancellation</span>
+              <div className="db-patient-empty">
+                <div className="db-empty-icon">
+                  <CalendarPlus size={22} color="#94A3B8" />
                 </div>
-                <h5 className="text-clinical-on-surface font-bold text-lg mb-1">Aucun patient prévu</h5>
-                <p className="text-sm text-slate-500 mb-6">Votre planning de consultations est vide pour le moment.</p>
-                <button onClick={() => openGlobalModal('appointment')} className="py-2.5 px-6 bg-clinical-primary/10 text-clinical-primary rounded-lg font-bold text-sm hover:bg-clinical-primary/20 transition-all">
+                <h4>Aucun Patient Prévu</h4>
+                <p>La liste des rendez-vous confirmés est vide aujourd'hui.</p>
+                <button
+                  className="db-btn-demarrer"
+                  style={{ marginTop: 8, padding: '11px 24px', width: 'auto', borderRadius: 8 }}
+                  onClick={() => openGlobalModal('appointment')}
+                >
+                  <CalendarPlus size={15} />
                   Planifier un RDV
                 </button>
               </div>
             )}
           </div>
 
-          {/* Salle d'Attente Detailed List */}
-          <div className="lg:col-span-8 space-y-6">
-            <div className="flex justify-between items-center">
-              <h4 className="text-lg font-semibold text-clinical-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>group</span>
+          {/* ─── RIGHT: Salle d'attente ─── */}
+          <div>
+            <div className="db-salle-header">
+              <div className="db-section-title" style={{ marginBottom: 0 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
                 Détails Salle d'attente
-              </h4>
-              <div className="flex gap-2">
-                <button className="text-xs font-bold px-4 py-1.5 bg-clinical-primary text-white rounded-full">Actifs ({salleCount})</button>
-                <button onClick={() => navigate('/salle-attente')} className="text-xs font-medium px-4 py-1.5 text-clinical-on-surface-variant hover:bg-clinical-surface-container transition-colors rounded-full">Gérer</button>
+              </div>
+              <div className="db-tabs">
+                <button
+                  className={`db-tab ${salleTab === 'actifs' ? 'db-tab-active' : 'db-tab-inactive'}`}
+                  onClick={() => setSalleTab('actifs')}
+                >
+                  ACTIFS ({activeList.length})
+                </button>
+                <button
+                  className={`db-tab ${salleTab === 'tous' ? 'db-tab-active' : 'db-tab-inactive'}`}
+                  onClick={() => setSalleTab('tous')}
+                >
+                  TOUS
+                </button>
               </div>
             </div>
-            
-            <div className="bg-clinical-surface-container-lowest border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+
+            <div className="db-salle-card">
               {salleList.length > 0 ? (
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-50">
-                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Patient</th>
-                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Heure Prévue</th>
-                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Statut</th>
-                      <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {salleList.map(rdv => (
-                      <tr key={rdv.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <p className="text-sm font-bold text-clinical-on-surface">{rdv.patients?.prenom} {rdv.patients?.nom}</p>
-                          <p className="text-[10px] text-slate-500 font-medium tracking-tight">Motif: {rdv.notes || rdv.motif || 'Consultation générale'}</p>
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium text-clinical-on-surface-variant">
-                          {formatTime(rdv.date_rdv)}
-                        </td>
-                        <td className="px-6 py-4">
-                          {rdv.status === RDV_STATUSES.IN_CONSULTATION ? (
-                             <span className="px-2 py-1 bg-blue-50 text-blue-600 border border-blue-200 text-[10px] font-bold rounded uppercase">En Cours</span>
-                          ) : (
-                             <span className="px-2 py-1 bg-green-50 text-green-600 text-[10px] font-bold rounded uppercase">En Attente</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button onClick={() => navigate(rdv.status === RDV_STATUSES.IN_CONSULTATION ? `/consultation/${rdv.id}` : `/salle-attente`)} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-clinical-primary rounded-lg text-xs font-bold transition-colors">
-                            {rdv.status === RDV_STATUSES.IN_CONSULTATION ? "Ouvrir" : "Prendre"}
-                          </button>
-                        </td>
+                <>
+                  <table className="db-salle-table">
+                    <thead>
+                      <tr>
+                        <th>Patient &amp; Motif</th>
+                        <th>Attente</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions Rapides</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="p-12 text-center flex flex-col items-center">
-                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                    <span className="material-symbols-outlined text-slate-300" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>chair</span>
+                    </thead>
+                    <tbody>
+                      {salleList.map(rdv => {
+                        const av = getAvatarColor(rdv.patient_id || rdv.id)
+                        const initials = getInitials(rdv.patients?.prenom, rdv.patients?.nom)
+                        return (
+                          <tr key={rdv.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div className="db-row-avatar" style={{ background: av.bg, color: av.text }}>
+                                  {initials}
+                                </div>
+                                <div>
+                                  <div className="db-row-name">
+                                    {civility(rdv.patients?.sexe)} {rdv.patients?.prenom} {rdv.patients?.nom}
+                                  </div>
+                                  <div className="db-row-motif">
+                                    {rdv.notes || rdv.motif || 'Consultation'}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td><WaitCell rdv={rdv} /></td>
+                            <td><StatusBadge status={rdv.status} /></td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                <button className="db-action-btn" title="Notifier" onClick={() =>
+                                  notify({ title: 'Notification', description: `${rdv.patients?.prenom} a été notifié.` })
+                                }>
+                                  <Bell size={13} />
+                                </button>
+                                {rdv.status !== RDV_STATUSES.IN_CONSULTATION && (
+                                  <button className="db-action-btn" title="Démarrer" onClick={() =>
+                                    navigate(`/salle-attente`)
+                                  }>
+                                    <PlayCircle size={13} />
+                                  </button>
+                                )}
+                                <button className="db-action-btn danger" title="Plus">
+                                  <MoreHorizontal size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="db-salle-footer">
+                    <button onClick={() => navigate('/salle-attente')}>
+                      Gérer la Salle d'attente Complète &rsaquo;
+                    </button>
                   </div>
-                  <p className="text-sm font-medium text-slate-500">La salle d'attente est vide.</p>
+                </>
+              ) : (
+                <div className="db-salle-empty">
+                  <div className="db-empty-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                  </div>
+                  <h4>Salle vide</h4>
+                  <p>Aucun patient en attente ou en consultation pour l'instant.</p>
                 </div>
               )}
-              <div className="p-4 bg-slate-50/50 text-center border-t border-slate-100">
-                <button onClick={() => navigate('/salle-attente')} className="text-xs font-bold text-clinical-primary hover:underline">Gérer la salle d'attente complète</button>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Bottom Section: Latest Activity or Recent Data */}
-        <div className="bg-clinical-surface-container-low rounded-2xl p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h4 className="text-sm font-bold uppercase tracking-widest text-clinical-on-secondary-container">Performance du Cabinet</h4>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-clinical-primary-container">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="material-symbols-outlined text-clinical-primary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>monitoring</span>
-                <span className="text-xs font-medium text-slate-500">Taux de Remplissage</span>
-              </div>
-              <div className="text-2xl font-bold text-clinical-on-surface">{totalRdv > 0 ? '92%' : '0%'}</div>
-              <div className="mt-2 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className={`h-full bg-clinical-primary`} style={{ width: totalRdv > 0 ? '92%' : '0%' }}></div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-clinical-secondary">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="material-symbols-outlined text-clinical-secondary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>timer</span>
-                <span className="text-xs font-medium text-slate-500">Délai Moyen</span>
-              </div>
-              <div className="text-2xl font-bold text-clinical-on-surface">18 min</div>
-              <div className="mt-2 text-[10px] font-medium text-clinical-error flex items-center gap-1">
-                <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>arrow_upward</span>
-                +4 min (est.)
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-clinical-tertiary">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="material-symbols-outlined text-clinical-tertiary" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>verified</span>
-                <span className="text-xs font-medium text-slate-500">Confirmations</span>
-              </div>
-              <div className="text-2xl font-bold text-clinical-on-surface">{totalRdv > 0 ? Math.round((confirmedCount/totalRdv)*100) : 0}%</div>
-              <div className="mt-2 text-[10px] font-medium text-clinical-primary">Haute fiabilité</div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-xl shadow-sm border-b-2 border-slate-300">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="material-symbols-outlined text-slate-400" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>outpatient</span>
-                <span className="text-xs font-medium text-slate-500">Nouveaux Patients</span>
-              </div>
-              <div className="text-2xl font-bold text-clinical-on-surface">+5</div>
-              <div className="mt-2 text-[10px] font-medium text-slate-400">Aujourd'hui</div>
-            </div>
-          </div>
-        </div>
       </div>
     </PinLock>
   )
