@@ -52,11 +52,22 @@ function StaffManagementPage() {
       return
     }
 
+    // Capture cabinetId and current session NOW, before signUp potentially
+    // disrupts the auth state (Supabase client-side signUp can reset the session)
+    const activeCabinetId = cabinetId || profile?.cabinet_id
+    if (!activeCabinetId) {
+      setError('Cabinet introuvable — rechargez la page et réessayez.')
+      return
+    }
+
+    // Save the current admin session so we can restore it after signUp
+    const { data: { session: adminSession } } = await supabase.auth.getSession()
+
     setFormLoading(true)
     setError(null)
 
     try {
-      // 1. Create auth user
+      // 1. Create the new auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email.trim().toLowerCase(),
         password: form.password,
@@ -64,7 +75,7 @@ function StaffManagementPage() {
           data: {
             nom_complet: form.nom_complet,
             role: form.role,
-            cabinet_id: cabinetId,
+            cabinet_id: activeCabinetId,
           },
         },
       })
@@ -78,12 +89,20 @@ function StaffManagementPage() {
 
       if (!authData.user) throw new Error('Erreur lors de la création du compte')
 
-      // 2. Create profile linked to the same cabinet
+      // 2. Restore the admin session if signUp changed it
+      if (adminSession && authData.session?.user?.id !== adminSession.user?.id) {
+        await supabase.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token,
+        })
+      }
+
+      // 3. Create the profile for the new user linked to the same cabinet
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert([{
           id: authData.user.id,
-          cabinet_id: cabinetId,
+          cabinet_id: activeCabinetId,
           role: form.role,
           nom_complet: form.nom_complet.trim(),
         }], { onConflict: 'id' })
@@ -93,7 +112,7 @@ function StaffManagementPage() {
         throw new Error(`Erreur création profil: ${profileError.message}`)
       }
 
-      // 3. Success
+      // 4. Success
       notify({ title: 'Utilisateur ajouté', description: `${form.nom_complet} a été ajouté en tant que ${form.role}.` })
       setForm({ nom_complet: '', email: '', password: '', role: 'secretaire' })
       setShowForm(false)

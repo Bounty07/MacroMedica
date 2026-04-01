@@ -292,28 +292,31 @@ export default function PatientProfileView({ patientId, onBack }) {
             </button>
           </div>
 
-          {/* Financial Status */}
-          <div className="mt-auto">
-            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Statut Financier</h3>
-            <div className="p-4 rounded-[20px] border border-slate-100 bg-white shadow-sm space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-[13px] font-medium text-slate-500">Total payé</span>
-                <span className="text-[14px] font-bold text-slate-800">{finances.paye.toLocaleString()} MAD</span>
+          {/* Contact Quick Info */}
+          <div className="mb-6 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 shadow-sm">
+                  <span className="text-[12px]">📞</span>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Téléphone</p>
+                  <p className="text-[13px] font-semibold text-slate-700">{patient.telephone || 'Non renseigné'}</p>
+                </div>
               </div>
-              <div className="flex justify-between items-center pt-3 border-t border-slate-50">
-                <span className="text-[13px] font-medium text-slate-500">En attente</span>
-                {finances.du > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold uppercase">Impayé</span>
-                    <span className="text-[14px] font-bold text-rose-600">{finances.du.toLocaleString()} MAD</span>
+              {patient.email && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 shadow-sm">
+                    <span className="text-[12px]">✉️</span>
                   </div>
-                ) : (
-                  <span className="text-[14px] font-bold text-teal-600">0 MAD</span>
-                )}
-              </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email</p>
+                    <p className="text-[13px] font-semibold text-slate-700 truncate max-w-[180px]">{patient.email}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
         </aside>
 
         {/* ── 3. Main Content Area (Tabs) ── */}
@@ -343,7 +346,7 @@ export default function PatientProfileView({ patientId, onBack }) {
             </div>
 
             <div className="flex gap-1 overflow-x-auto custom-scrollbar pb-2">
-              {['Historique', 'Consultations', 'Ordonnances', 'Facturation'].map(tab => (
+              {['Informations', 'Historique', 'Consultations', 'Ordonnances', 'Facturation'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -353,6 +356,7 @@ export default function PatientProfileView({ patientId, onBack }) {
                       : 'text-slate-500 hover:bg-slate-100'
                   }`}
                 >
+                  {tab === 'Informations' && <span className="mr-2">ℹ️</span>}
                   {tab === 'Historique' && <Activity className="w-4 h-4 inline-block mr-2 opacity-70" />}
                   {tab === 'Consultations' && <Stethoscope className="w-4 h-4 inline-block mr-2 opacity-70" />}
                   {tab === 'Ordonnances' && <FileText className="w-4 h-4 inline-block mr-2 opacity-70" />}
@@ -426,8 +430,126 @@ export default function PatientProfileView({ patientId, onBack }) {
                 </div>
               </div>
             )}
+
+            {activeTab === 'Informations' && (
+              <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-[18px] font-bold text-slate-900">Détails du Patient</h3>
+                  <button className="text-[13px] font-bold text-teal-600 bg-teal-50 px-4 py-2 rounded-xl hover:bg-teal-100 transition-colors">
+                    Modifier les informations
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Identité & Contact Card */}
+                  <div className="bg-white rounded-[24px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+                        <span className="text-[16px]">👤</span>
+                      </div>
+                      <h4 className="text-[15px] font-bold text-slate-900">Identité & Contact</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Nom Complet</p>
+                        <p className="text-[14px] font-semibold text-slate-800">{patient.nom} {patient.prenom}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date de naissance</p>
+                        <p className="text-[14px] font-semibold text-slate-800">{patient.date_naissance ? formatDateFull(patient.date_naissance) : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">CIN / Passeport</p>
+                        <p className="text-[14px] font-semibold text-slate-800">{patient.cin || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Téléphone</p>
+                        <p className="text-[14px] font-semibold text-slate-800">{patient.telephone || '-'}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email</p>
+                        <p className="text-[14px] font-semibold text-slate-800">{patient.email || '-'}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Adresse Complète</p>
+                        <p className="text-[14px] font-semibold text-slate-800">{patient.adresse || '-'}</p>
+                        <p className="text-[13px] text-slate-500 mt-0.5">{patient.ville || ''}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Profil Médical Card */}
+                  <div className="bg-white rounded-[24px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+                        <span className="text-[16px]">❤️</span>
+                      </div>
+                      <h4 className="text-[15px] font-bold text-slate-900">Profil Médical</h4>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Groupe Sanguin</p>
+                          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 font-black text-[16px] border border-rose-100">
+                            {patient.groupe_sanguin || '-'}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Sexe</p>
+                          <div className="inline-flex items-center px-4 h-12 rounded-2xl bg-slate-50 text-slate-700 font-bold text-[14px] border border-slate-100">
+                            {patient.sexe === 'homme' ? 'Masculin' : patient.sexe === 'femme' ? 'Féminin' : '-'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-[16px] bg-amber-50/50 border border-amber-100/50">
+                        <p className="text-[11px] font-bold text-amber-600/70 uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Allergies
+                        </p>
+                        <p className="text-[14px] font-semibold text-slate-800">{patient.allergies || 'Aucune allergie signalée'}</p>
+                      </div>
+
+                      <div className="p-4 rounded-[16px] bg-slate-50 border border-slate-100">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Antécédents Médicaux</p>
+                        <p className="text-[14px] font-semibold text-slate-800 leading-relaxed whitespace-pre-wrap">{patient.antecedents || 'Aucun antécédent particulier signalé dans le dossier.'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Administratif & Assurance Card */}
+                  <div className="bg-white rounded-[24px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100 md:col-span-2">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500">
+                        <span className="text-[16px]">🛡️</span>
+                      </div>
+                      <h4 className="text-[15px] font-bold text-slate-900">Administratif & Assurance</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                      <div className="p-4 rounded-[16px] bg-slate-50 border border-slate-100">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Couverture Médicale</p>
+                        <p className="text-[15px] font-bold text-emerald-700">{patient.mutuelle || 'Non renseigné'}</p>
+                      </div>
+                      <div className="p-4 rounded-[16px] bg-slate-50 border border-slate-100">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date d'inscription</p>
+                        <p className="text-[14px] font-semibold text-slate-800">{formatDateFull(patient.created_at)}</p>
+                      </div>
+                      <div className="p-4 rounded-[16px] bg-slate-50 border border-slate-100">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Statut du Dossier</p>
+                        <div className="inline-flex items-center px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 text-[11px] font-bold mt-1">
+                          Dossier Actif
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
             
-            {activeTab !== 'Historique' && (
+            {activeTab !== 'Historique' && activeTab !== 'Informations' && (
               <div className="flex flex-col items-center justify-center h-64 text-slate-400">
                 <FileText className="w-12 h-12 mb-4 opacity-20" />
                 <p className="font-medium text-[15px]">Module {activeTab} en cours de développement</p>

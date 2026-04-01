@@ -1,6 +1,6 @@
 import { Bell, Download, Plus } from 'lucide-react'
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useMatch } from 'react-router-dom'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import FloatingActionButton from '../components/common/FloatingActionButton'
 import AppointmentFormModal from '../components/forms/AppointmentFormModal'
@@ -72,6 +72,10 @@ function DashboardLayout() {
   const cacheLoadedRef = useRef(false)
 
   const title = useMemo(() => getPageTitle(location.pathname), [location.pathname])
+
+  // Routes that need full-bleed layout (no padding wrapper, no scroll — component owns its own height)
+  const FULL_BLEED_ROUTES = ['/secretaire']
+  const isFullBleed = FULL_BLEED_ROUTES.includes(location.pathname)
 
   const breadcrumbs = useMemo(() => {
     const segments = location.pathname.split('/').filter(Boolean)
@@ -244,10 +248,11 @@ function DashboardLayout() {
               searchLoading={searchLoading}
             />
 
-            <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
-              <div className="w-full max-w-[1400px] mx-auto px-5 md:px-[32px] py-[24px]">
-                <Outlet />
-              </div>
+            <main className={`flex-1 overflow-x-hidden relative ${isFullBleed ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
+              {isFullBleed
+                ? <Outlet />
+                : <div className="w-full max-w-[1400px] mx-auto px-5 md:px-[32px] py-[24px]"><Outlet /></div>
+              }
             </main>
           </SidebarInset>
 

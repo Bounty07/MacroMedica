@@ -7,6 +7,7 @@ export function getSidebarForRole(role) {
           items: [
             { label: 'Tableau de bord', to: '/dashboard', icon: 'layout-dashboard' },
             { label: "Salle d'attente", to: '/salle-attente', icon: 'users-round' },
+            { label: 'Secrétaire', to: '/secretaire', icon: 'layout-dashboard' },
           ],
         },
         {
@@ -18,10 +19,15 @@ export function getSidebarForRole(role) {
           ],
         },
         {
-          label: 'GESTION',
+          label: 'SECRÉTAIRES',
           items: [
             { label: 'Facturation', to: '/facturation', icon: 'credit-card' },
             { label: 'Équipe', to: '/equipe', icon: 'users-round' },
+          ],
+        },
+        {
+          label: 'GESTION',
+          items: [
             { label: 'Paramètres', to: '/parametres', icon: 'settings-2' },
           ],
         },
@@ -32,6 +38,7 @@ export function getSidebarForRole(role) {
         {
           label: 'ACCUEIL',
           items: [
+            { label: 'Secrétaire (Dashboard)', to: '/secretaire', icon: 'layout-dashboard' },
             { label: 'Agenda (RDV)', to: '/agenda', icon: 'calendar-days' },
             { label: "Salle d'attente", to: '/salle-attente', icon: 'users-round' },
           ],

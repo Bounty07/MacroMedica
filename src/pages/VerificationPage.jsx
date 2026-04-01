@@ -107,7 +107,7 @@ export default function VerificationPage() {
               Notre équipe validera votre compte dans les 2 prochaines heures ouvrées. Vous pouvez déjà commencer à explorer votre tableau de bord.
             </p>
             <button 
-              onClick={() => navigate('/dashboard')}
+              onClick={() => { window.location.href = '/dashboard' }}
               className="bg-teal-600 text-white rounded-xl px-8 py-4 font-bold hover:bg-teal-700 transition shadow-lg shadow-teal-600/20"
             >
               Accéder au tableau de bord →
@@ -195,7 +195,7 @@ export default function VerificationPage() {
             {/* Skip Option */}
             <div className="text-center">
               <button 
-                onClick={() => navigate('/dashboard')}
+                onClick={() => { window.location.href = '/dashboard' }}
                 className="text-slate-400 hover:text-slate-600 text-sm font-medium underline underline-offset-4 decoration-slate-300"
               >
                 Passer pour l'instant → Accéder au tableau de bord

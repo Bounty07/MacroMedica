@@ -23,8 +23,10 @@ const initialForm = {
 const GROUPE_SANGUIN_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 function PatientFormModal({ open, onClose, patient, onSuccess }) {
-  const { notify } = useAppContext()
-  const { cabinetId } = useCabinetId()
+  const { notify, cabinetId: ctxCabinetId } = useAppContext()
+  const { cabinetId: hookCabinetId, loading: cabinetLoading } = useCabinetId()
+  // Use whichever source resolves first
+  const cabinetId = ctxCabinetId || hookCabinetId
 
   const [form, setForm] = useState(initialForm)
   const [loading, setLoading] = useState(false)
@@ -63,8 +65,12 @@ function PatientFormModal({ open, onClose, patient, onSuccess }) {
     if (!form.prenom.trim()) { setError('Le prénom est requis.'); return }
     if (!form.nom.trim()) { setError('Le nom est requis.'); return }
 
+    if (cabinetLoading) {
+      setError('Chargement du profil en cours, veuillez réessayer dans un instant.')
+      return
+    }
     if (!cabinetId) {
-      setError('Session expirée — reconnectez-vous.')
+      setError("Cabinet introuvable sur ce compte. Contactez un administrateur.")
       return
     }
 
@@ -208,8 +214,8 @@ function PatientFormModal({ open, onClose, patient, onSuccess }) {
 
         <div className="flex justify-end gap-3">
           <button type="button" onClick={onClose} className="interactive rounded-2xl border border-slate-200 bg-white px-5 py-3 text-base font-medium text-slate-700">Annuler</button>
-          <button type="submit" disabled={loading} className="interactive inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-base font-medium text-white disabled:opacity-70">
-            {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Enregistrement...</> : 'Enregistrer'}
+          <button type="submit" disabled={loading || cabinetLoading} className="interactive inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-base font-medium text-white disabled:opacity-70">
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Enregistrement...</> : cabinetLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Chargement...</> : 'Enregistrer'}
           </button>
         </div>
       </form>

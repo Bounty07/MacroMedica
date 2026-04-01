@@ -23,6 +23,7 @@ import ConsultationWorkspace from './pages/dashboard/ConsultationWorkspace'
 
 // Role redirect component based on new requirements
 import { useAppContext } from './context/AppContext'
+import SecretaireDashboard from './dashboards/SecretaireDashboard'
 
 function RootRedirect() {
   const { isAuthenticated, isInitializing, role } = useAppContext()
@@ -30,7 +31,7 @@ function RootRedirect() {
   if (!isAuthenticated) return <LandingPage />
   
   if (role === 'secretaire') {
-    return <Navigate to="/salle-attente" replace />
+    return <Navigate to="/secretaire" replace />
   }
   return <Navigate to="/dashboard" replace />
 }
@@ -48,6 +49,7 @@ function App() {
           {/* Connected App Routes — require authentication */}
           <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             {/* SECRÉTAIRE & DOCTEUR (Shared Access) */}
+            <Route path="/secretaire" element={<SecretaireDashboard />} />
             <Route path="/salle-attente" element={<WaitingRoomPage />} />
             <Route path="/agenda" element={<AppointmentsPage />} />
             <Route path="/facturation" element={<BillingPage />} />

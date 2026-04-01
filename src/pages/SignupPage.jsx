@@ -78,11 +78,10 @@ function SignupPage() {
       })
 
       if (authError) {
-        // "Database error saving new user" = broken trigger on auth.users
         if (authError.message?.includes('Database error saving new user')) {
           throw new Error(
             'Erreur de configuration Supabase : un trigger cassé empêche la création du compte. ' +
-            'Vérifiez les triggers sur auth.users dans votre dashboard Supabase et exécutez le script "supabase-fix-trigger.sql" fourni.'
+            'Vérifiez les triggers sur auth.users dans votre dashboard Supabase.'
           )
         }
         if (authError.message?.includes('already registered') || authError.message?.includes('already been registered')) {
@@ -90,25 +89,44 @@ function SignupPage() {
         }
         throw authError
       }
-      
+
       if (!authData.user) throw new Error('Erreur lors de la création du compte')
 
-      // 2. Sign in immediately to establish a valid JWT session for RLS (Approach B)
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
-      })
+      // 2. Use the session from signUp if available (auto-confirm enabled),
+      //    otherwise sign in with password to get a working JWT
+      let activeUserId = authData.user.id
+      let activeSession = authData.session
 
-      if (signInError) {
-         console.error('Session signing error:', signInError);
-         throw new Error(`Session non établie: ${signInError.message}`);
+      if (!activeSession) {
+        // Email confirmation is required — sign in to get a JWT
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+        })
+        if (signInError) {
+          // Likely needs email confirmation first — save data locally and redirect
+          localStorage.setItem('pending_setup', JSON.stringify({
+            userId: activeUserId,
+            email: form.email,
+            password: form.password,
+            nomComplet: `Dr. ${form.prenom.trim()} ${form.nom.trim()}`,
+            nomCabinet: form.nomCabinet.trim(),
+            ville: form.ville?.trim() || null,
+            telephone: form.telephone?.trim() || null,
+          }))
+          toast.success('Vérifiez vos emails et confirmez votre compte pour continuer.')
+          navigate('/verification')
+          return
+        }
+        activeUserId = signInData.user.id
+        activeSession = signInData.session
       }
 
-      // 3. Create cabinet with authenticated user (Owner = tenant_id)
+      // 3. Create cabinet with authenticated user
       const { data: cabinet, error: cabError } = await supabase
         .from('cabinets')
         .insert([{
-          tenant_id: signInData.user.id,
+          tenant_id: activeUserId,
           nom: form.nomCabinet.trim(),
           ville: form.ville?.trim() || null,
           telephone: form.telephone?.trim() || null
@@ -117,31 +135,30 @@ function SignupPage() {
         .single()
 
       if (cabError) {
-        console.error('Cabinet insertion failed (check RLS policies):', cabError)
-        throw new Error(`Erreur création cabinet: ${cabError.message}`);
+        console.error('Cabinet insertion failed:', cabError)
+        throw new Error(`Erreur création cabinet: ${cabError.message}`)
       }
 
       if (!cabinet?.id) throw new Error('Identifiant cabinet non généré par la base de données')
 
-      // 4. Create profile linked to cabinet
+      // 4. Create/update profile linked to the cabinet
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert([{
-          id: signInData.user.id,
+          id: activeUserId,
           cabinet_id: cabinet.id,
           role: 'docteur',
           nom_complet: `Dr. ${form.prenom.trim()} ${form.nom.trim()}`
-          // specialite: form.specialite  // Add if column exists in profiles
         }], { onConflict: 'id' })
 
       if (profileError) {
-        console.error('Profile creation failed (check RLS policies or schema):', profileError)
-        throw new Error(`Erreur création profil: ${profileError.message}`);
+        console.error('Profile creation failed:', profileError)
+        throw new Error(`Erreur création profil: ${profileError.message}`)
       }
 
-      // 5. Success Flow
+      // 5. Success — store context and redirect
       localStorage.setItem('pending_verification', JSON.stringify({
-        userId: signInData.user.id,
+        userId: activeUserId,
         nomComplet: `Dr. ${form.prenom} ${form.nom}`,
         email: form.email,
         telephone: form.telephone,
@@ -154,9 +171,8 @@ function SignupPage() {
       navigate('/verification')
 
     } catch (err) {
-      console.error('Signup Failure Process:', err)
-      const msg = err.message || 'Erreur inconnue lors de la création du compte'
-      setError(msg)
+      console.error('Signup error:', err)
+      setError(err.message || 'Erreur inconnue lors de la création du compte')
     } finally {
       setLoading(false)
     }

@@ -199,7 +199,7 @@ function PatientsPage() {
 
   // ── Profile View Routing ──
   if (id) {
-    return <PatientProfileView patientId={id} onBack={() => navigate('/dashboard/patients')} />
+    return <PatientProfileView patientId={id} onBack={() => navigate('/patients')} />
   }
 
   if (isLoadingPatients || isLoadingConsultations) {
@@ -341,7 +341,7 @@ function PatientsPage() {
             <button
               key={p.id}
               type="button"
-              onClick={() => navigate(`/dashboard/patients/${p.id}`)}
+              onClick={() => navigate(`/patients/${p.id}`)}
               className="w-full grid grid-cols-[auto_1fr_110px_140px_140px_100px_80px] gap-4 px-6 py-4 border-b border-slate-50 items-center text-left hover:bg-slate-50/50 transition-colors group"
             >
               {/* Avatar */}
@@ -384,11 +384,11 @@ function PatientsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5">
                 <div
                   className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-teal-50 hover:text-teal-600 transition-colors"
                   title="Prendre RDV"
-                  onClick={(e) => { e.stopPropagation(); navigate('/dashboard/appointments') }}
+                  onClick={(e) => { e.stopPropagation(); navigate('/agenda') }}
                 >
                   <Calendar className="w-4 h-4" />
                 </div>

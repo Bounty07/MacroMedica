@@ -46,7 +46,7 @@ export function AppProvider({ children }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*, clinics(*)')
+        .select('*, cabinets(*)')
         .eq('id', userId)
         .single()
       if (error) throw error
