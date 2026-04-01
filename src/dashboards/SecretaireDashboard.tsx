@@ -89,17 +89,17 @@ function WaitCell({ rdv }) {
   if (isLate) {
     return (
       <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>Retard</div>
-        <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Prévu {formatTime(rdv.date_rdv)}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: '#DC2626', letterSpacing: '-0.5px' }}>Retard</div>
+        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Prévu {formatTime(rdv.date_rdv)}</div>
       </div>
     );
   }
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', fontFamily: "'JetBrains Mono', monospace" }}>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px' }}>
         {String(Math.floor(mins / 60)).padStart(2, '0')}:{String(mins % 60).padStart(2, '0')} min
       </div>
-      <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+      <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
         Arrivé {formatTime(rdv.updated_at || rdv.date_rdv)}
       </div>
     </div>
@@ -266,17 +266,17 @@ const SecretaireDashboard = memo(() => {
           padding: 16px 20px; border-bottom: 1px solid #F1F5F9;
           display: flex; justify-content: space-between; align-items: center;
         }
-        .sec-panel-title { font-size: 14px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px; }
+        .sec-panel-title { font-size: 15px; font-weight: 800; color: #0F172A; display: flex; align-items: center; gap: 8px; }
         .sec-panel-badge { background: ${ACCENT_LIGHT}; color: ${ACCENT}; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; }
 
         .sec-table { width: 100%; border-collapse: collapse; }
-        .sec-table th { padding: 12px 20px; text-align: left; font-size: 10px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #E9EFF5; background: #FAFBFC; }
-        .sec-table td { padding: 14px 20px; border-bottom: 1px solid #F8FAFB; vertical-align: middle; }
+        .sec-table th { padding: 12px 20px; text-align: left; font-size: 11px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #E9EFF5; background: #FAFBFC; }
+        .sec-table td { padding: 16px 20px; border-bottom: 1px solid #F8FAFB; vertical-align: middle; font-size: 14px; }
         .sec-table tr:hover td { background: #FAFBFC; }
         .sec-table tr:last-child td { border-bottom: none; }
 
-        .sec-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
-        .sec-name { font-size: 14px; font-weight: 800; color: #0F172A; letter-spacing: -0.3px; }
+        .sec-avatar { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; }
+        .sec-name { font-size: 15px; font-weight: 800; color: #0F172A; letter-spacing: -0.3px; }
 
         .sec-btn-action { background: #F1F5F9; color: #475569; border: none; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
         .sec-btn-action:hover { background: #E2E8F0; color: #0F172A; }
@@ -292,9 +292,9 @@ const SecretaireDashboard = memo(() => {
           transition: all 0.2s;
         }
         .sec-rdv-item.active { background: #FFF; border-color: ${ACCENT_LIGHT}; box-shadow: 0 4px 12px rgba(0,79,69,0.04); }
-        .sec-rdv-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-        .sec-rdv-item-name { font-size: 15px; font-weight: 800; color: #0F172A; letter-spacing: -0.3px; }
-        .sec-rdv-item-meta { font-size: 12px; color: #64748B; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .sec-rdv-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .sec-rdv-item-name { font-size: 16px; font-weight: 800; color: #0F172A; letter-spacing: -0.3px; }
+        .sec-rdv-item-meta { font-size: 13px; color: #64748B; display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
         .sec-rdv-item-actions { display: flex; gap: 8px; margin-top: 14px; }
         .sec-rdv-btn { flex: 1; padding: 10px; border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
         .sec-rdv-btn.add { background: #0F172A; color: #FFF; }
@@ -430,12 +430,12 @@ const SecretaireDashboard = memo(() => {
                               </div>
                             </div>
                           </td>
-                          <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#64748B' }}>
+                          <td style={{ fontSize: 14, fontWeight: 700, color: '#64748B', letterSpacing: '-0.3px' }}>
                             {formatTime(apt.date_rdv)}
                           </td>
-                          <td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
                             {isConsult ? (
-                              <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 6, textTransform: 'uppercase' }}>EN CONSULTATION</span>
+                              <span style={{ display: 'inline-block', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 800, padding: '5px 12px', borderRadius: 8, textTransform: 'uppercase', letterSpacing: '0.3px', whiteSpace: 'nowrap', lineHeight: 1 }}>En consultation</span>
                             ) : (
                               <WaitCell rdv={apt} />
                             )}
@@ -485,7 +485,7 @@ const SecretaireDashboard = memo(() => {
                     <div key={apt.id} className="sec-rdv-item active">
                       <div className="sec-rdv-item-header">
                         <span className="sec-rdv-item-name">{civility(pt.sexe)} {name}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: '#10B981', background: '#ECFDF5', padding: '3px 8px', borderRadius: 6 }}>{formatTime(apt.date_rdv)}</span>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#10B981', background: '#ECFDF5', padding: '3px 10px', borderRadius: 6, letterSpacing: '-0.3px' }}>{formatTime(apt.date_rdv)}</span>
                       </div>
                       <div className="sec-rdv-item-meta"><Activity size={12} /> {apt.motif || apt.notes || 'Consultation de suivi'}</div>
                       <div className="sec-rdv-item-meta"><Phone size={12} /> {pt.telephone || 'Non renseigné'} • {pt.assurance || 'Aucune'}</div>
