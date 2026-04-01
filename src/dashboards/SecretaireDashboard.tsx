@@ -1,64 +1,54 @@
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
+import { supabase } from '../lib/supabase';
+import { RDV_STATUSES, isValidTransition } from '../lib/workflow';
+import {
+  CalendarPlus, Bell, Trash2, Phone, MoreHorizontal,
+  PlayCircle, FileText, StickyNote, ChevronRight, Clock,
+  Stethoscope, User, Activity, Calendar, Search, Users, CheckCircle, CreditCard
+} from 'lucide-react';
 
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const TODAY_DATE = new Date().toISOString().slice(0, 10);
+// ─── Constants ───
+const TZ = 'Africa/Casablanca';
+const ACCENT = '#004F45';
+const ACCENT_LIGHT = '#E6F4F1';
 
-const MOCK_APPOINTMENTS = [
-  { id:'apt1', patientId:'p1', staffId:'staff1', date:TODAY_DATE, time:'08:30', duration:30, type:'Consultation générale', status:'ARRIVE',          roomId:null,    arrivalTime:'08:25', checkoutTime:null,    reminderSent:true,  reminderConfirmed:true,  paymentMethod:null,       notes:'',                lateFlag:false },
-  { id:'apt2', patientId:'p2', staffId:'staff1', date:TODAY_DATE, time:'09:00', duration:30, type:'Suivi HTA',             status:'EN_CONSULTATION',  roomId:'room1', arrivalTime:'08:55', checkoutTime:null,    reminderSent:true,  reminderConfirmed:true,  paymentMethod:null,       notes:'',                lateFlag:false },
-  { id:'apt3', patientId:'p3', staffId:'staff1', date:TODAY_DATE, time:'09:30', duration:45, type:'Bilan complet',         status:'ARRIVE',          roomId:null,    arrivalTime:'09:25', checkoutTime:null,    reminderSent:true,  reminderConfirmed:false, paymentMethod:null,       notes:'CNOPS',           lateFlag:true  },
-  { id:'apt4', patientId:'p4', staffId:'staff1', date:TODAY_DATE, time:'10:00', duration:30, type:'Contrôle',              status:'TERMINE',         roomId:null,    arrivalTime:'09:52', checkoutTime:'10:30', reminderSent:true,  reminderConfirmed:true,  paymentMethod:'especes',  notes:'',                lateFlag:false },
-  { id:'apt5', patientId:'p5', staffId:'staff1', date:TODAY_DATE, time:'10:30', duration:30, type:'Urgence',               status:'PLANIFIE',        roomId:null,    arrivalTime:null,    checkoutTime:null,    reminderSent:false, reminderConfirmed:false, paymentMethod:null,       notes:'Douleur abdominale', lateFlag:false },
-  { id:'apt6', patientId:'p1', staffId:'staff1', date:TODAY_DATE, time:'11:00', duration:30, type:'Consultation générale', status:'PLANIFIE',        roomId:null,    arrivalTime:null,    checkoutTime:null,    reminderSent:true,  reminderConfirmed:true,  paymentMethod:null,       notes:'',                lateFlag:false },
-  { id:'apt7', patientId:'p6', staffId:'staff1', date:TODAY_DATE, time:'11:30', duration:20, type:'Suivi',                 status:'PLANIFIE',        roomId:null,    arrivalTime:null,    checkoutTime:null,    reminderSent:false, reminderConfirmed:false, paymentMethod:null,       notes:'',                lateFlag:false },
-  { id:'apt8', patientId:'p2', staffId:'staff1', date:TODAY_DATE, time:'14:00', duration:30, type:'Consultation générale', status:'PLANIFIE',        roomId:null,    arrivalTime:null,    checkoutTime:null,    reminderSent:true,  reminderConfirmed:true,  paymentMethod:null,       notes:'',                lateFlag:false },
+// ─── Helpers ───
+function formatDateLong() {
+  const now = new Date();
+  const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  return `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+}
+
+function formatTime(iso) {
+  if (!iso) return '--:--';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+}
+
+const civility = (sexe) => sexe === 'F' ? 'Mme.' : 'M.';
+const getInitials = (prenom, nom) => `${(prenom?.[0] || '').toUpperCase()}${(nom?.[0] || '').toUpperCase()}`;
+
+const AVATAR_PALETTES = [
+  { bg: '#D1FAE5', text: '#065F46' },
+  { bg: '#DBEAFE', text: '#1E40AF' },
+  { bg: '#FEE2E2', text: '#991B1B' },
+  { bg: '#FEF3C7', text: '#92400E' },
+  { bg: '#EDE9FE', text: '#4C1D95' },
+  { bg: '#FCE7F3', text: '#831843' },
+  { bg: '#CFFAFE', text: '#164E63' },
 ];
+function getAvatarColor(id) {
+  const idx = id ? String(id).charCodeAt(0) % AVATAR_PALETTES.length : 0;
+  return AVATAR_PALETTES[idx];
+}
 
-const MOCK_PATIENTS = [
-  { id:'p1', prenom:'Fatima Zahra', nom:'Benali',   cin:'BE234567', telephone:'0661234567', assurance:'CNSS',     cnss:'123456789', solde:400 },
-  { id:'p2', prenom:'Mohammed',     nom:'Tazi',      cin:'BK345678', telephone:'0662345678', assurance:'CNSS',     cnss:'234567890', solde:0   },
-  { id:'p3', prenom:'Nadia',        nom:'Chraibi',   cin:'BH456789', telephone:'0663456789', assurance:'CNOPS',    cnops:'OP123',    solde:450 },
-  { id:'p4', prenom:'Hassan',       nom:'Benkiran',  cin:'BE567890', telephone:'0664567890', assurance:'Aucune',                     solde:0   },
-  { id:'p5', prenom:'Samira',       nom:'Naciri',    cin:'BJ678901', telephone:'0665678901', assurance:'CNSS',     cnss:'345678901', solde:0   },
-  { id:'p6', prenom:'Omar',         nom:'Skalli',    cin:'BL789012', telephone:'0666789012', assurance:'Mutuelle',                   solde:0   },
-];
+const fmtMAD = (n) => `${Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits:2, maximumFractionDigits:2 })} MAD`;
 
-const MOCK_INVOICES = [
-  { id:'inv1', patientId:'p4', date:TODAY_DATE, total:200, paymentMethod:'especes', status:'paid'    },
-  { id:'inv2', patientId:'p2', date:TODAY_DATE, total:350, paymentMethod:'tpe',     status:'paid'    },
-  { id:'inv3', patientId:'p1', date:TODAY_DATE, total:150, paymentMethod:'especes', status:'paid'    },
-  { id:'inv4', patientId:'p3', date:TODAY_DATE, total:450, paymentMethod:null,      status:'pending' },
-];
-
-const MOCK_ROOMS = [
-  { id:'room1', name:'Salle 1', color:'#1A56DB', occupied:true,  currentPatient:'p2'  },
-  { id:'room2', name:'Salle 2', color:'#0D9488', occupied:false, currentPatient:null  },
-];
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-const getWaitMin = (arrivalTime: string | null): number => {
-  if (!arrivalTime) return 0;
-  const [h, m] = arrivalTime.split(':').map(Number);
-  const n = new Date();
-  return Math.max(0, (n.getHours() * 60 + n.getMinutes()) - (h * 60 + m));
-};
-
-const avatarColor = (str: string): string => {
-  const colors = ['#1A56DB','#10B981','#F59E0B','#7C3AED','#EF4444','#0D9488','#06B6D4','#F97316'];
-  let h = 0;
-  for (let i = 0; i < (str || '').length; i++) h = (h * 31 + str.charCodeAt(i)) % colors.length;
-  return colors[h];
-};
-
-const getInitials = (name: string): string => {
-  const parts = (name || '').trim().split(' ').filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return (name[0] || '?').toUpperCase();
-};
-
-const fmtMAD = (n: number): string => `${Number(n || 0).toLocaleString('fr-FR')} MAD`;
-
-const getAssurancePill = (assurance: string) => {
+const getAssurancePill = (assurance) => {
   const a = (assurance || '').toLowerCase();
   if (a.includes('cnss'))                          return { bg:'#EFF6FF', color:'#1D4ED8', text:'CNSS'     };
   if (a.includes('cnops'))                         return { bg:'#F5F3FF', color:'#7C3AED', text:'CNOPS'    };
@@ -67,489 +57,474 @@ const getAssurancePill = (assurance: string) => {
   return { bg:'#F8FAFC', color:'#6B7280', text:'Aucune' };
 };
 
-const getWaitColor = (min: number): string => {
-  if (min < 15) return '#10B981';
-  if (min <= 30) return '#F59E0B';
-  return '#EF4444';
-};
-
-const getPatientFullName = (patients: any[], patientId: string): string => {
-  const p = patients.find(pt => pt.id === patientId);
-  if (!p) return 'Inconnu';
-  return `${p.prenom || ''} ${p.nom || ''}`.trim();
-};
-
-// ─── SVG ICONS ────────────────────────────────────────────────────────────────
-const PeopleIcon = ({ color }: { color: string }) => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-  </svg>
-);
-
-const CalendarIcon = ({ color }: { color: string }) => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-    <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-  </svg>
-);
-
-const CurrencyIcon = ({ color }: { color: string }) => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/>
-    <path d="M12 18V6"/>
-  </svg>
-);
-
-const PhoneIcon = ({ color }: { color: string }) => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.67 12 19.79 19.79 0 0 1 1.63 3.5 2 2 0 0 1 3.6 1.36h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-  </svg>
-);
-
-// ─── COMPONENT ────────────────────────────────────────────────────────────────
-const SecretaireDashboard = memo(({ db = {}, setDb, showToast, waitTick, navigateTo }: any) => {
-
-  // FIX 1 — inject fonts
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap';
-    document.head.appendChild(link);
-  }, []);
-
-  // ── Data with mock fallback ──
-  const appointments: any[] = (db?.appointments?.length > 0) ? db.appointments : MOCK_APPOINTMENTS;
-  const patients: any[]     = (db?.patients?.length > 0)     ? db.patients     : MOCK_PATIENTS;
-  const invoices: any[]     = (db?.invoices?.length > 0)     ? db.invoices     : MOCK_INVOICES;
-  const rooms: any[]        = (db?.config?.rooms?.length > 0) ? db.config.rooms : MOCK_ROOMS;
-
-  // ── Live clock ──
-  const [clockTime, setClockTime] = useState('');
+// ─── Live Clock & Wait ───
+function useLiveClock() {
+  const [d, setD] = useState(formatDateLong);
+  const [t, setT] = useState('');
   useEffect(() => {
     const tick = () => {
-      const n = new Date();
-      setClockTime(
-        String(n.getHours()).padStart(2,'0') + ':' +
-        String(n.getMinutes()).padStart(2,'0') + ':' +
-        String(n.getSeconds()).padStart(2,'0')
-      );
+      setD(formatDateLong());
+      const now = new Date();
+      setT(now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit', second:'2-digit', timeZone:TZ }));
     };
     tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
   }, []);
+  return { date: d, time: t };
+}
+
+function WaitCell({ rdv }) {
+  const [mins, setMins] = useState(0);
+  useEffect(() => {
+    const since = rdv.updated_at || rdv.date_rdv;
+    if (!since) return;
+    const update = () => setMins(Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60000)));
+    update();
+    const iv = setInterval(update, 30000);
+    return () => clearInterval(iv);
+  }, [rdv]);
+
+  const isLate = rdv.status === RDV_STATUSES.SCHEDULED && mins > 15;
+  if (isLate) {
+    return (
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>Retard</div>
+        <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Prévu {formatTime(rdv.date_rdv)}</div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', fontFamily: "'JetBrains Mono', monospace" }}>
+        {String(Math.floor(mins / 60)).padStart(2, '0')}:{String(mins % 60).padStart(2, '0')} min
+      </div>
+      <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+        Arrivé {formatTime(rdv.updated_at || rdv.date_rdv)}
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ───
+const SecretaireDashboard = memo(() => {
+  const navigate = useNavigate();
+  const { profile, rdvList, consultations, openGlobalModal, notify } = useAppContext();
+  const { date: dateStr, time: clockTime } = useLiveClock();
+
+  // ── MOCK DATA FALLBACK ──
+  const NOW = new Date();
+  const t = (offsetMin) => new Date(NOW.getTime() - offsetMin * 60000).toISOString();
+
+  const MOCK_SALLE = [
+    { id: 'm1', status: RDV_STATUSES.IN_CONSULTATION, date_rdv: t(60), updated_at: t(25), notes: 'Consultation', patients: { id: 'p1', prenom: 'Ahmed', nom: 'Radi', sexe: 'M', assurance: 'CNOPS', telephone: '066112233' } },
+    { id: 'm2', status: RDV_STATUSES.ARRIVED, date_rdv: t(40), updated_at: t(10), notes: 'Contrôle', patients: { id: 'p2', prenom: 'Sofia', nom: 'Berrada', sexe: 'F', assurance: 'CNSS', telephone: '0655443322' } },
+    { id: 'm3', status: RDV_STATUSES.ARRIVED, date_rdv: t(15), updated_at: t(2), notes: 'Renouvellement', patients: { id: 'p3', prenom: 'Karim', nom: 'Slimani', sexe: 'M', assurance: 'Aucune', telephone: '0677889900' } },
+  ];
+  const MOCK_RDV = [
+    { id: 'r1', status: RDV_STATUSES.SCHEDULED, date_rdv: new Date(NOW.getTime() + 45*60000).toISOString(), patients: { id: 'p4', prenom: 'Nawal', nom: 'Zairi', sexe: 'F', assurance: 'CNSS', telephone: '0612345678' } },
+    { id: 'r2', status: RDV_STATUSES.SCHEDULED, date_rdv: new Date(NOW.getTime() + 120*60000).toISOString(), patients: { id: 'p5', prenom: 'Youssef', nom: 'Lamrini', sexe: 'M', assurance: 'Mutuelle', telephone: '0698765432' } },
+    { id: 'r3', status: RDV_STATUSES.SCHEDULED, date_rdv: new Date(NOW.getTime() + 180*60000).toISOString(), patients: { id: 'p6', prenom: 'Leila', nom: 'Tahiri', sexe: 'F', assurance: 'Privée', telephone: '0600112233' } },
+  ];
+
+  const useMock = !rdvList || rdvList.length === 0;
+
+  // ── Slices ──
+  const confirmes = useMemo(() => {
+    if (useMock) return MOCK_RDV;
+    return rdvList.filter(r => r.status === RDV_STATUSES.SCHEDULED).sort((a,b) => new Date(a.date_rdv) - new Date(b.date_rdv));
+  }, [rdvList, useMock]);
+
+  const activeApts = useMemo(() => {
+    if (useMock) return MOCK_SALLE;
+    return rdvList.filter(r => [RDV_STATUSES.ARRIVED, RDV_STATUSES.IN_CONSULTATION].includes(r.status))
+      .sort((a,b) => {
+        if (a.status === RDV_STATUSES.IN_CONSULTATION && b.status !== RDV_STATUSES.IN_CONSULTATION) return -1;
+        if (b.status === RDV_STATUSES.IN_CONSULTATION && a.status !== RDV_STATUSES.IN_CONSULTATION) return 1;
+        return new Date(a.updated_at || a.date_rdv) - new Date(b.updated_at || b.date_rdv);
+      });
+  }, [rdvList, useMock]);
+
+  const completedApts = useMemo(() => {
+    if (useMock) return [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }];
+    return rdvList.filter(r => r.status === RDV_STATUSES.COMPLETED);
+  }, [rdvList, useMock]);
+
+  const revenuJour = useMemo(() => {
+    if (useMock) return 2450;
+    const today = new Date().toLocaleDateString('fr-CA', { timeZone: TZ });
+    return consultations.filter(c => c.statut === 'paye' && c.date_consult?.startsWith(today)).reduce((s, c) => s + (c.montant || 0), 0);
+  }, [consultations, useMock]);
+
+  const enConsult = activeApts.filter(r => r.status === RDV_STATUSES.IN_CONSULTATION);
+  const enAttente = activeApts.filter(r => r.status === RDV_STATUSES.ARRIVED);
+
+  const totalRdvDuJour = confirmes.length + activeApts.length + completedApts.length;
 
   const [nextPatientIndex, setNextPatientIndex] = useState(0);
-
-  // ── Computed ──
-  const { todayApts, arriveApts, enConsultApts, termineApts, confirmedRdv, unconfirmedCount, rdvInList,
-          todayRevenue, especesTotal, tpeTotal, enAttenteTotal } = useMemo(() => {
-    const today  = appointments.filter(a => a.date === TODAY_DATE);
-    const arr    = today.filter(a => a.status === 'ARRIVE').sort((a,b) => (a.arrivalTime||'').localeCompare(b.arrivalTime||''));
-    const enc    = today.filter(a => a.status === 'EN_CONSULTATION');
-    const ter    = today.filter(a => a.status === 'TERMINE');
-    const conf   = today.filter(a => a.reminderConfirmed);
-    const rdvIn  = today.filter(a => !['ARRIVE','EN_CONSULTATION','TERMINE','ANNULE'].includes(a.status));
-    const paid   = invoices.filter(i => i.date === TODAY_DATE && i.status === 'paid');
-    const pend   = invoices.filter(i => i.date === TODAY_DATE && i.status === 'pending');
-    return {
-      todayApts: today, arriveApts: arr, enConsultApts: enc, termineApts: ter,
-      confirmedRdv: conf, unconfirmedCount: today.length - conf.length, rdvInList: rdvIn,
-      todayRevenue:   paid.reduce((s,i) => s + (i.total||0), 0),
-      especesTotal:   paid.filter(i => i.paymentMethod === 'especes').reduce((s,i) => s + (i.total||0), 0),
-      tpeTotal:       paid.filter(i => i.paymentMethod === 'tpe').reduce((s,i) => s + (i.total||0), 0),
-      enAttenteTotal: pend.reduce((s,i) => s + (i.total||0), 0),
-    };
-  }, [appointments, invoices, waitTick]);
-
-  const nextPatient = arriveApts.length > 0 ? arriveApts[nextPatientIndex % arriveApts.length] : null;
-  const todayDateStr = new Date().toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
-  const fullDateStr  = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const nextPatient = enAttente.length > 0 ? enAttente[nextPatientIndex % enAttente.length] : null;
 
   // ── Actions ──
-  const handleCommencer = (apt: any) => {
-    const freeRoom = rooms.find(r => !r.occupied);
-    if (!freeRoom) { if (showToast) showToast('Aucune salle disponible', 'error'); return; }
-    if (setDb) setDb((prev: any) => ({
-      ...prev,
-      appointments: (prev.appointments||[]).map((a: any) => a.id === apt.id ? { ...a, status:'EN_CONSULTATION', roomId: freeRoom.id } : a),
-      config: { ...prev.config, rooms: (prev.config?.rooms||[]).map((r: any) => r.id === freeRoom.id ? { ...r, occupied:true, currentPatient: apt.patientId } : r) },
-    }));
-    const name = getPatientFullName(patients, apt.patientId);
-    if (showToast) showToast(`👨‍⚕️ ${name} appelé(e) en ${freeRoom.name}`, 'success');
-  };
+  const transitionStatus = useCallback(async (rdvId, target) => {
+    if (useMock) return true; // Pretend it worked for mock demo
+    const { data: cur, error: e } = await supabase.from('rdv').select('status').eq('id', rdvId).single();
+    if (e || !cur) { notify({ title: 'Erreur', description: 'RDV introuvable', tone: 'error' }); return false; }
+    try { isValidTransition(cur.status, target); } catch (err) {
+      notify({ title: 'Transition invalide', description: err.message, tone: 'error' }); return false;
+    }
+    const { error } = await supabase.from('rdv').update({ status: target }).eq('id', rdvId);
+    if (error) { notify({ title: 'Erreur DB', description: error.message, tone: 'error' }); return false; }
+    return true;
+  }, [notify, useMock]);
 
-  const handleTerminer = (apt: any) => {
-    if (setDb) setDb((prev: any) => ({
-      ...prev,
-      appointments: (prev.appointments||[]).map((a: any) => a.id === apt.id ? { ...a, status:'EN_ATTENTE_PAIEMENT', roomId:null } : a),
-      config: { ...prev.config, rooms: (prev.config?.rooms||[]).map((r: any) => r.id === apt.roomId ? { ...r, occupied:false, currentPatient:null } : r) },
-    }));
-    if (showToast) showToast('✅ Consultation terminée — Veuillez encaisser', 'info');
+  const handleCommencer = async (apt) => {
+    const ok = await transitionStatus(apt.id, RDV_STATUSES.IN_CONSULTATION);
+    if (ok) notify({ title: 'Consultation démarrée', description: `${apt.patients?.prenom} appelé en salle.`, tone:'success' });
   };
-
-  const handleSupprimer = (apt: any) => {
-    if (!window.confirm('Retirer ce patient de la salle ?')) return;
-    if (setDb) setDb((prev: any) => ({ ...prev, appointments: (prev.appointments||[]).map((a: any) => a.id === apt.id ? { ...a, status:'ANNULE' } : a) }));
+  const handleTerminer = async (apt) => {
+    const ok = await transitionStatus(apt.id, RDV_STATUSES.COMPLETED);
+    if (ok) notify({ title: 'Consultation terminée', description: `N'oubliez pas d'éditer la facture si nécessaire.`, tone:'info' });
   };
-
-  const handleAjouterSalle = (apt: any) => {
-    const now = new Date();
-    const t = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    if (setDb) setDb((prev: any) => ({ ...prev, appointments: (prev.appointments||[]).map((a: any) => a.id === apt.id ? { ...a, status:'ARRIVE', arrivalTime: t } : a) }));
-    const name = getPatientFullName(patients, apt.patientId);
-    if (showToast) showToast(`✅ ${name} ajouté(e) à la salle d'attente`, 'success');
+  const handleAnnulerRdv = async (apt) => {
+    if (!window.confirm("Annuler ce rendez-vous ?")) return;
+    const ok = await transitionStatus(apt.id, RDV_STATUSES.ABSENT); // Or delete
+    if (ok) notify({ title: 'RDV Annulé', description: 'Le rendez-vous a été retiré.', tone:'error' });
   };
-
-  const handleAnnulerRdv = (apt: any) => {
-    if (setDb) setDb((prev: any) => ({ ...prev, appointments: (prev.appointments||[]).map((a: any) => a.id === apt.id ? { ...a, status:'ANNULE' } : a) }));
-    if (showToast) showToast('❌ RDV annulé', 'error');
+  const handleAjouterSalle = async (apt) => {
+    const ok = await transitionStatus(apt.id, RDV_STATUSES.ARRIVED);
+    if (ok) notify({ title: 'Patient en salle', description: `${apt.patients?.prenom} ajouté à la salle d'attente.`, tone:'success' });
   };
-
-  const pill = (bg: string, color: string, text: string) => (
-    <span style={{ background:bg, color, fontSize:'11px', fontWeight:700, padding:'3px 8px', borderRadius:'8px', whiteSpace:'nowrap' as const, fontFamily:"'DM Sans', sans-serif" }}>{text}</span>
-  );
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    // FIX 6 — root is flex column with fixed height
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', minHeight:'100vh', fontFamily:"'DM Sans', system-ui, sans-serif" }}>
+    <>
+      <style>{`
+        .sec-root {
+          font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+          display: flex; flex-direction: column;
+          height: 100vh; background: #F8FAFB;
+        }
 
-      {/* ══ TOPBAR ══ */}
-      <div style={{ height:'52px', background:'#FFFFFF', borderBottom:'0.5px solid #E5E7EB', display:'flex', alignItems:'center', padding:'0 18px', gap:'12px', flexShrink:0 }}>
-        <div style={{ background:'#F8FAFC', border:'0.5px solid #E5E7EB', borderRadius:'8px', display:'flex', alignItems:'center', padding:'0 10px', maxWidth:'320px', width:'100%', height:'34px' }}>
-          <span style={{ fontSize:'13px', color:'#9CA3AF', marginRight:'6px' }}>🔍</span>
-          <input type="text" placeholder="Trouver un patient…" style={{ background:'transparent', border:'none', outline:'none', width:'100%', fontSize:'13px', color:'#0F172A', fontFamily:"'DM Sans', system-ui, sans-serif" }} />
+        /* TOPBAR */
+        .sec-topbar {
+          height: 60px; background: #FFF; border-bottom: 1px solid #EEF2F7;
+          display: flex; alignItems: center; padding: 0 24px; gap: 16px; flex-shrink: 0;
+        }
+        .sec-search {
+          background: #F1F5F9; border-radius: 10px; display: flex; align-items: center;
+          padding: 0 12px; height: 38px; width: 340px; border: 1px solid #E2E8F0;
+          transition: all 0.2s;
+        }
+        .sec-search:focus-within { background: #FFF; border-color: ${ACCENT}; box-shadow: 0 0 0 3px ${ACCENT_LIGHT}; }
+        .sec-search input { background: transparent; border: none; outline: none; width: 100%; font-size: 13px; margin-left:8px; color: #0F172A; }
+
+        .sec-btn-rdv {
+          background: ${ACCENT}; color: #FFF; border: none; padding: 0 20px; height: 38px; border-radius: 10px;
+          font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+          transition: opacity 0.2s; box-shadow: 0 4px 12px rgba(0,79,69,0.2);
+        }
+        .sec-btn-rdv:hover { opacity: 0.9; }
+
+        /* CONTENT */
+        .sec-content {
+          flex: 1; padding: 24px; overflow-y: auto;
+        }
+        .sec-greeting { font-size: 24px; font-weight: 800; color: #0F172A; margin-bottom: 4px; letter-spacing: -0.5px; }
+        .sec-subline  { font-size: 13px; color: #64748B; margin-bottom: 24px; }
+
+        /* KPIS */
+        .sec-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .sec-kpi-card {
+          background: #FFF; border-radius: 14px; border: 1px solid #E9EFF5; padding: 20px;
+          display: flex; flex-direction: column; position: relative; overflow: hidden;
+        }
+        .sec-kpi-card::before {
+          content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+        }
+        .sec-kpi-label { font-size: 11px; font-weight: 700; color: #6B7B8D; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .sec-kpi-val { font-size: 32px; font-weight: 800; color: #0F172A; line-height: 1; font-family: 'JetBrains Mono', monospace; }
+
+        /* GRIDS */
+        .sec-layout {
+          display: grid; grid-template-columns: 1fr 380px; gap: 20px;
+        }
+        @media (max-width: 1200px) { .sec-layout { grid-template-columns: 1fr; } }
+
+        /* TABLE CARD */
+        .sec-panel { background: #FFF; border-radius: 14px; border: 1px solid #E9EFF5; overflow: hidden; display: flex; flex-direction: column; }
+        .sec-panel-header {
+          padding: 16px 20px; border-bottom: 1px solid #F1F5F9;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .sec-panel-title { font-size: 14px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px; }
+        .sec-panel-badge { background: ${ACCENT_LIGHT}; color: ${ACCENT}; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; }
+
+        .sec-table { width: 100%; border-collapse: collapse; }
+        .sec-table th { padding: 12px 20px; text-align: left; font-size: 10px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #E9EFF5; background: #FAFBFC; }
+        .sec-table td { padding: 14px 20px; border-bottom: 1px solid #F8FAFB; vertical-align: middle; }
+        .sec-table tr:hover td { background: #FAFBFC; }
+        .sec-table tr:last-child td { border-bottom: none; }
+
+        .sec-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+        .sec-name { font-size: 13px; font-weight: 700; color: #0F172A; }
+
+        .sec-btn-action { background: #F1F5F9; color: #475569; border: none; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
+        .sec-btn-action:hover { background: #E2E8F0; color: #0F172A; }
+        .sec-btn-action.primary { background: ${ACCENT_LIGHT}; color: ${ACCENT}; }
+        .sec-btn-action.primary:hover { background: ${ACCENT}; color: #FFF; }
+        .sec-btn-action.danger { background: #FEE2E2; color: #DC2626; padding: 8px; }
+        .sec-btn-action.danger:hover { background: #FECACA; }
+
+        /* RDV LIST */
+        .sec-rdv-list { padding: 12px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+        .sec-rdv-item {
+          border: 1px solid #E9EFF5; border-radius: 12px; padding: 16px; background: #FAFBFC;
+          transition: all 0.2s;
+        }
+        .sec-rdv-item.active { background: #FFF; border-color: ${ACCENT_LIGHT}; box-shadow: 0 4px 12px rgba(0,79,69,0.04); }
+        .sec-rdv-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .sec-rdv-item-name { font-size: 13px; font-weight: 800; color: #0F172A; }
+        .sec-rdv-item-meta { font-size: 12px; color: #64748B; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .sec-rdv-item-actions { display: flex; gap: 8px; margin-top: 14px; }
+        .sec-rdv-btn { flex: 1; padding: 10px; border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .sec-rdv-btn.add { background: #0F172A; color: #FFF; }
+        .sec-rdv-btn.add:hover { background: #1E293B; }
+        .sec-rdv-btn.cancel { background: #FFF; border-color: #E2E8F0; color: #DC2626; }
+        .sec-rdv-btn.cancel:hover { background: #FEE2E2; border-color: #FECACA; }
+
+        /* ACTION BAR (Bottom sticky) */
+        .sec-action-bar {
+          height: 70px; background: #0F172A; flex-shrink: 0;
+          display: flex; align-items: center; padding: 0 24px; gap: 20px;
+        }
+        .sec-ab-label { font-size: 10px; text-transform: uppercase; font-weight: 800; color: rgba(255,255,255,0.4); letter-spacing: 1px; }
+        .sec-ab-patient { flex: 1; display: flex; align-items: center; gap: 12px; }
+        .sec-ab-btn {
+          background: ${ACCENT}; color: #FFF; border: none; border-radius: 10px; padding: 0 20px; height: 42px;
+          font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 8px; cursor: pointer;
+          transition: background 0.2s;
+        }
+        .sec-ab-btn:hover { background: #006659; }
+        .sec-ab-btn:disabled { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.3); cursor: not-allowed; }
+        .sec-ab-btn.outline { background: transparent; border: 1px solid rgba(255,255,255,0.2); }
+        .sec-ab-btn.outline:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+      `}</style>
+      <div className="sec-root">
+
+        {/* ── TOPBAR ── */}
+        <div className="sec-topbar">
+          <div className="sec-search">
+            <Search size={16} color="#94A3B8" />
+            <input type="text" placeholder="Rechercher un dossier, un patient..." />
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{ fontSize: 13, color: '#64748B', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span>{dateStr}</span>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", background: '#F1F5F9', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>{clockTime}</span>
+          </div>
+          <button className="sec-btn-rdv" onClick={() => openGlobalModal('appointment')}>
+            <CalendarPlus size={16} /> Nouveau RDV
+          </button>
         </div>
 
-        <div style={{ flex:1 }} />
+        {/* ── CONTENT ── */}
+        <div className="sec-content">
+          <div className="sec-greeting">Gestion de l'Accueil</div>
+          <div className="sec-subline">Vue d'ensemble et pilotage de la salle d'attente pour {profile?.nom_complet || 'votre cabinet'}.</div>
 
-        <span style={{ fontSize:'13px', color:'#6B7280', whiteSpace:'nowrap' }}>Aujourd'hui : {todayDateStr}</span>
-
-        {/* FIX 1+5 — live clock with JetBrains Mono */}
-        <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:'12px', color:'#6B7280', background:'#F8FAFC', border:'0.5px solid #E5E7EB', padding:'5px 10px', borderRadius:'6px', whiteSpace:'nowrap' }}>{clockTime}</span>
-
-        <div style={{ position:'relative', cursor:'pointer' }}>
-          <span style={{ fontSize:'18px' }}>🔔</span>
-          <div style={{ position:'absolute', top:0, right:0, width:'7px', height:'7px', background:'#EF4444', borderRadius:'50%', border:'1.5px solid #FFF' }} />
-        </div>
-
-        <div style={{ width:'32px', height:'32px', background:'#1A56DB', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', color:'#FFF', fontSize:'11px', fontWeight:700, flexShrink:0 }}>JS</div>
-      </div>
-
-      {/* ══ CONTENT — FIX 6: scrollable middle ══ */}
-      <div style={{ flex:1, overflowY:'auto', padding:'20px 22px', background:'#F0F2F5' }}>
-
-        {/* Breadcrumb — FIX 5 */}
-        <div style={{ fontSize:'13px', color:'#6B7280', marginBottom:'18px', display:'flex', alignItems:'center', gap:'6px' }}>
-          <span>⊞</span> Vue d'ensemble — {fullDateStr}
-        </div>
-
-        {/* ── KPI CARDS — FIX 2 ── */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'14px', marginBottom:'18px' }}>
-
-          {/* CARD 1 */}
-          <div style={{ background:'#FFFFFF', borderRadius:'10px', border:'0.5px solid #E5E7EB', position:'relative', overflow:'hidden', padding:'18px 20px', minHeight:'200px', display:'flex', flexDirection:'column' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:'3px', background:'#EF4444' }} />
-            {/* Label + icon */}
-            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px' }}>
-              <span style={{ fontSize:'10.5px', fontWeight:700, color:'#6B7280', textTransform:'uppercase', letterSpacing:'0.07em', fontFamily:"'DM Sans', sans-serif" }}>Salle d'attente</span>
-              <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'#FFF1F2', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><PeopleIcon color="#EF4444" /></div>
+          {/* ── KPIs ── */}
+          <div className="sec-kpi-row">
+            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
+              <style>{`.sec-kpi-card:nth-child(1)::before { background: #DC2626; }`}</style>
+              <div className="sec-kpi-label">Salle d'attente <Users size={16} color="#DC2626" /></div>
+              <div className="sec-kpi-val" style={{ color: '#DC2626' }}>{activeApts.length}</div>
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>patients en ce moment</div>
             </div>
-            {/* Big number */}
-            <div style={{ fontSize:'34px', fontWeight:800, color:'#EF4444', fontFamily:"'JetBrains Mono', monospace", lineHeight:1, marginBottom:'4px' }}>{arriveApts.length}</div>
-            <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'14px', fontFamily:"'DM Sans', sans-serif" }}>patients en ce moment</div>
-            {/* Mini list */}
-            <div style={{ display:'flex', flexDirection:'column', gap:'6px', flex:1 }}>
-              {arriveApts.slice(0,3).map(a => {
-                const name = getPatientFullName(patients, a.patientId);
-                const wMin = getWaitMin(a.arrivalTime);
-                return (
-                  <div key={a.id} style={{ background:'#F8FAFC', borderRadius:'7px', padding:'6px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:'6px', overflow:'hidden' }}>
-                      <div style={{ width:'6px', height:'6px', borderRadius:'50%', background: wMin > 20 ? '#F59E0B' : '#10B981', flexShrink:0 }} />
-                      <span style={{ fontSize:'12px', color:'#0F172A', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
-                    </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:'5px', flexShrink:0 }}>
-                      <span style={{ fontSize:'11px', fontFamily:"'JetBrains Mono', monospace", color:'#6B7280' }}>{wMin}m</span>
-                      {pill('#ECFDF5','#065F46','En attente')}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
+              <style>{`.sec-kpi-card:nth-child(2)::before { background: #2563EB; }`}</style>
+              <div className="sec-kpi-label">Consultation <Stethoscope size={16} color="#2563EB" /></div>
+              <div className="sec-kpi-val" style={{ color: '#2563EB' }}>{enConsult.length}</div>
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>en cours dans les salles</div>
+            </div>
+            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
+              <style>{`.sec-kpi-card:nth-child(3)::before { background: #16A34A; }`}</style>
+              <div className="sec-kpi-label">RDV du jour <CheckCircle size={16} color="#16A34A" /></div>
+              <div className="sec-kpi-val" style={{ color: '#16A34A' }}>{completedApts.length}<span style={{ fontSize: 16, color: '#94A3B8' }}>/{totalRdvDuJour}</span></div>
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>patients terminés</div>
+            </div>
+            <div className="sec-kpi-card" style={{ paddingLeft: 22 }}>
+              <style>{`.sec-kpi-card:nth-child(4)::before { background: #0D9488; }`}</style>
+              <div className="sec-kpi-label">Revenu du jour <CreditCard size={16} color="#0D9488" /></div>
+              <div className="sec-kpi-val" style={{ color: '#0D9488', fontSize: 28 }}>{fmtMAD(revenuJour)}</div>
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>encaissé aujourd'hui</div>
             </div>
           </div>
 
-          {/* CARD 2 */}
-          <div style={{ background:'#FFFFFF', borderRadius:'10px', border:'0.5px solid #E5E7EB', position:'relative', overflow:'hidden', padding:'18px 20px', minHeight:'200px', display:'flex', flexDirection:'column' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:'3px', background:'#1A56DB' }} />
-            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px' }}>
-              <span style={{ fontSize:'10.5px', fontWeight:700, color:'#6B7280', textTransform:'uppercase', letterSpacing:'0.07em', fontFamily:"'DM Sans', sans-serif" }}>RDV du jour</span>
-              <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'#EFF6FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><CalendarIcon color="#1A56DB" /></div>
-            </div>
-            <div style={{ display:'flex', alignItems:'baseline', gap:'6px', marginBottom:'4px' }}>
-              <span style={{ fontSize:'34px', fontWeight:800, color:'#1A56DB', fontFamily:"'JetBrains Mono', monospace", lineHeight:1 }}>{confirmedRdv.length}</span>
-              <span style={{ fontSize:'12px', color:'#6B7280', fontFamily:"'DM Sans', sans-serif" }}>/ {todayApts.length} confirmés</span>
-            </div>
-            <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'14px', fontFamily:"'DM Sans', sans-serif" }}>{unconfirmedCount} sans confirmation · rappel requis</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'6px', flex:1 }}>
-              {todayApts.filter(a => a.status === 'PLANIFIE').slice(0,3).map(a => {
-                const isConf = a.reminderConfirmed;
-                const name   = getPatientFullName(patients, a.patientId);
-                return (
-                  <div key={a.id} style={{ background:'#F8FAFC', borderRadius:'7px', padding:'6px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <div style={{ display:'flex', gap:'6px', alignItems:'center', overflow:'hidden' }}>
-                      <span style={{ fontSize:'11px', fontFamily:"'JetBrains Mono', monospace", color:'#6B7280', flexShrink:0 }}>{a.time}</span>
-                      <span style={{ fontSize:'12px', color:'#0F172A', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
-                    </div>
-                    {pill(isConf ? '#ECFDF5' : '#FFF7ED', isConf ? '#065F46' : '#C2410C', isConf ? '✓ Confirmé' : 'En attente')}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* CARD 3 */}
-          <div style={{ background:'#FFFFFF', borderRadius:'10px', border:'0.5px solid #E5E7EB', position:'relative', overflow:'hidden', padding:'18px 20px', minHeight:'200px', display:'flex', flexDirection:'column' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:'3px', background:'#10B981' }} />
-            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px' }}>
-              <span style={{ fontSize:'10.5px', fontWeight:700, color:'#6B7280', textTransform:'uppercase', letterSpacing:'0.07em', fontFamily:"'DM Sans', sans-serif" }}>Revenu du jour</span>
-              <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'#ECFDF5', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><CurrencyIcon color="#10B981" /></div>
-            </div>
-            <div style={{ fontSize:'34px', fontWeight:800, color:'#10B981', fontFamily:"'JetBrains Mono', monospace", lineHeight:1, marginBottom:'4px' }}>{todayRevenue.toLocaleString('fr-FR')}</div>
-            <div style={{ fontSize:'12px', color:'#6B7280', marginBottom:'14px', fontFamily:"'DM Sans', sans-serif" }}>{invoices.filter(i => i.date === TODAY_DATE && i.status === 'paid').length} consultations encaissées</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'6px', flex:1 }}>
-              {[
-                { label:'Espèces',    val: especesTotal,   color:'#0F172A' },
-                { label:'TPE',        val: tpeTotal,       color:'#0F172A' },
-                { label:'En attente', val: enAttenteTotal, color:'#F59E0B' },
-              ].map(row => (
-                <div key={row.label} style={{ background:'#F8FAFC', borderRadius:'7px', padding:'6px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span style={{ fontSize:'12px', color:row.color === '#F59E0B' ? '#F59E0B' : '#475569', fontWeight:500 }}>{row.label}</span>
-                  <span style={{ fontSize:'12px', fontFamily:"'JetBrains Mono', monospace", fontWeight:700, color:row.color }}>{fmtMAD(row.val)}</span>
+          <div className="sec-layout">
+            {/* ── LEFT: SALLE D'ATTENTE ── */}
+            <div className="sec-panel">
+              <div className="sec-panel-header">
+                <div className="sec-panel-title">
+                  <Users size={16} color={ACCENT} /> Patients — Salle d'attente
+                  <span className="sec-panel-badge">{activeApts.length}</span>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── BOTTOM GRID — FIX 5 ── */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:'14px' }}>
-
-          {/* LEFT — Patient table — FIX 3 */}
-          <div style={{ background:'#FFFFFF', borderRadius:'10px', border:'0.5px solid #E5E7EB', overflow:'hidden' }}>
-            <div style={{ padding:'12px 18px', borderBottom:'0.5px solid #F3F4F6', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                <span style={{ fontSize:'13.5px', fontWeight:700, color:'#0F172A' }}>Patients — salle d'attente</span>
-                <span style={{ background:'#EFF6FF', color:'#1D4ED8', fontSize:'11px', fontWeight:700, padding:'2px 8px', borderRadius:'10px', fontFamily:"'DM Sans', sans-serif" }}>{arriveApts.length + enConsultApts.length}</span>
               </div>
-              <button type="button" style={{ background:'#0B1628', color:'#FFF', border:'none', borderRadius:'7px', padding:'6px 12px', fontSize:'11.5px', fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans', system-ui, sans-serif" }}>
-                + Nouvelle tâche
-              </button>
-            </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="sec-table">
+                  <thead>
+                    <tr>
+                      <th>Patient &amp; Assurance</th>
+                      <th>Heure prévue</th>
+                      <th>Attente / Statut</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeApts.map((apt) => {
+                      const isConsult = apt.status === RDV_STATUSES.IN_CONSULTATION;
+                      const pt = apt.patients || {};
+                      const name = `${civility(pt.sexe)} ${pt.prenom} ${pt.nom}`;
+                      const av = getAvatarColor(pt.id || apt.id);
+                      const ass = getAssurancePill(pt.assurance || 'Aucune');
 
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                <thead>
-                  <tr>
-                    {["Nom et prénom","Heure d'entrée","Assurance","Attente","Montant dû","Actions"].map((c,i) => (
-                      <th key={i} style={{ padding:'10px 16px', fontSize:'11px', fontWeight:700, textTransform:'uppercase', color:'#9CA3AF', letterSpacing:'0.06em', background:'#FAFAFA', textAlign:'left', whiteSpace:'nowrap', borderBottom:'0.5px solid #F0F0F0', fontFamily:"'DM Sans', sans-serif" }}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...enConsultApts, ...arriveApts].map((apt, idx, arr) => {
-                    const isConsult = apt.status === 'EN_CONSULTATION';
-                    const name = getPatientFullName(patients, apt.patientId);
-                    const pt   = patients.find((p: any) => p.id === apt.patientId) || {};
-                    const init = getInitials(name);
-                    const bgCol = avatarColor(name);
-                    const wMin  = getWaitMin(apt.arrivalTime);
-                    const assPill = getAssurancePill(pt.assurance || 'Aucune');
-                    const inv   = invoices.find((i: any) => i.patientId === apt.patientId && i.date === TODAY_DATE);
-                    const amtDue = inv?.total || pt.solde || 0;
-                    const room  = isConsult ? (rooms.find((r: any) => r.id === apt.roomId)?.name || 'Salle') : null;
-
-                    return (
-                      <tr key={apt.id}
-                        style={{ borderBottom: idx === arr.length-1 ? 'none' : '0.5px solid #F9FAFB', background:'#FFF', transition:'background 0.15s' }}
-                        onMouseEnter={e => (e.currentTarget.style.background='#FAFAFA')}
-                        onMouseLeave={e => (e.currentTarget.style.background='#FFF')}>
-
-                        {/* Name */}
-                        <td style={{ padding:'14px 16px', verticalAlign:'middle', fontSize:'13px' }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-                            <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:bgCol, color:'#FFF', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:800, flexShrink:0 }}>{init}</div>
-                            <span style={{ fontWeight:700, color:'#0F172A', fontSize:'13px', fontFamily:"'DM Sans', sans-serif" }}>{name}</span>
-                          </div>
-                        </td>
-
-                        {/* Arrival time */}
-                        <td style={{ padding:'14px 16px', verticalAlign:'middle', fontSize:'13px' }}>
-                          <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:'12px', color:'#6B7280' }}>{apt.arrivalTime || '--:--'}</span>
-                        </td>
-
-                        {/* Assurance */}
-                        <td style={{ padding:'14px 16px', verticalAlign:'middle' }}>
-                          <span style={{ background:assPill.bg, color:assPill.color, fontSize:'11px', fontWeight:700, padding:'3px 8px', borderRadius:'8px', whiteSpace:'nowrap', fontFamily:"'DM Sans', sans-serif" }}>{assPill.text}</span>
-                        </td>
-
-                        {/* Wait */}
-                        <td style={{ padding:'14px 16px', verticalAlign:'middle' }}>
-                          {isConsult
-                            ? <span style={{ color:'#1A56DB', fontWeight:700, fontSize:'12px', fontFamily:"'DM Sans', sans-serif" }}>{room}</span>
-                            : <span style={{ color:getWaitColor(wMin), fontFamily:"'JetBrains Mono', monospace", fontWeight:700, fontSize:'12px' }}>{wMin} min</span>
-                          }
-                        </td>
-
-                        {/* Amount */}
-                        <td style={{ padding:'14px 16px', verticalAlign:'middle' }}>
-                          <span style={{ fontFamily:"'JetBrains Mono', monospace", fontWeight:700, fontSize:'12px', color:'#0F172A' }}>{amtDue ? fmtMAD(amtDue) : '--'}</span>
-                        </td>
-
-                        {/* Actions */}
-                        <td style={{ padding:'14px 16px', verticalAlign:'middle' }}>
-                          <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
-                            {isConsult
-                              ? <button type="button" onClick={() => handleTerminer(apt)} style={{ background:'#10B981', color:'#FFF', border:'none', borderRadius:'7px', padding:'7px 14px', fontSize:'12px', fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>Terminer</button>
-                              : <button type="button" onClick={() => handleCommencer(apt)} style={{ background:'#0B1628', color:'#FFF', border:'none', borderRadius:'7px', padding:'7px 14px', fontSize:'12px', fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>Commencer</button>
-                            }
-                            <button type="button" onClick={() => handleSupprimer(apt)} style={{ background:'#FFF1F2', color:'#EF4444', border:'0.5px solid #FCA5A5', borderRadius:'7px', width:'30px', height:'30px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', cursor:'pointer', flexShrink:0 }}>✕</button>
-                          </div>
+                      return (
+                        <tr key={apt.id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div className="sec-avatar" style={{ background: av.bg, color: av.text }}>{getInitials(pt.prenom, pt.nom)}</div>
+                              <div>
+                                <div className="sec-name">{name}</div>
+                                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                                  <span style={{ fontSize: 10, background: ass.bg, color: ass.color, padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{ass.text}</span>
+                                  {apt.notes && <span style={{ fontSize: 10, color: '#94A3B8', padding: '2px 0' }}>• {apt.notes}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#64748B' }}>
+                            {formatTime(apt.date_rdv)}
+                          </td>
+                          <td>
+                            {isConsult ? (
+                              <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 6, textTransform: 'uppercase' }}>EN CONSULTATION</span>
+                            ) : (
+                              <WaitCell rdv={apt} />
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                              {isConsult ? (
+                                <button className="sec-btn-action primary" onClick={() => handleTerminer(apt)}>Terminer</button>
+                              ) : (
+                                <button className="sec-btn-action" onClick={() => handleCommencer(apt)}>Commencer</button>
+                              )}
+                              <button className="sec-btn-action danger" title="Annuler" onClick={() => handleAnnulerRdv(apt)}>
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {activeApts.length === 0 && (
+                      <tr>
+                        <td colSpan={4} style={{ padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+                          <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                          La salle d'attente est vide pour l'instant.
                         </td>
                       </tr>
-                    );
-                  })}
-                  {arriveApts.length === 0 && enConsultApts.length === 0 && (
-                    <tr><td colSpan={6} style={{ padding:'28px', textAlign:'center', color:'#9CA3AF', fontSize:'13px', fontFamily:"'DM Sans', sans-serif" }}>Aucun patient en salle d'attente</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* RIGHT — RDV sidebar — FIX 4 */}
-          <div style={{ background:'#FFFFFF', borderRadius:'10px', border:'0.5px solid #E5E7EB', display:'flex', flexDirection:'column', overflow:'hidden' }}>
-            <div style={{ padding:'12px 16px', borderBottom:'0.5px solid #F3F4F6', display:'flex', alignItems:'center', gap:'8px', flexShrink:0 }}>
-              <span style={{ fontSize:'13.5px', fontWeight:700, color:'#0F172A', fontFamily:"'DM Sans', sans-serif" }}>Rendez-vous aujourd'hui</span>
-              <span style={{ background:'#EFF6FF', color:'#1D4ED8', fontSize:'11px', fontWeight:700, padding:'2px 8px', borderRadius:'10px', fontFamily:"'DM Sans', sans-serif" }}>{rdvInList.length}</span>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            <div style={{ overflowY:'auto', padding:'8px', flex:1 }}>
-              {rdvInList.map((apt: any) => {
-                const isConf = apt.reminderConfirmed;
-                const name   = getPatientFullName(patients, apt.patientId);
-                const pt     = patients.find((p: any) => p.id === apt.patientId) || {};
+            {/* ── RIGHT: RDV DU JOUR ── */}
+            <div className="sec-panel">
+              <div className="sec-panel-header">
+                <div className="sec-panel-title">
+                  <Calendar size={16} color={ACCENT} /> Rendez-vous aujourd'hui
+                  <span className="sec-panel-badge">{confirmes.length}</span>
+                </div>
+              </div>
+              <div className="sec-rdv-list">
+                {confirmes.map(apt => {
+                  const pt = apt.patients || {};
+                  const name = `${pt.prenom} ${pt.nom}`;
+                  // Widen layout gives more space for inline details
+                  return (
+                    <div key={apt.id} className="sec-rdv-item active">
+                      <div className="sec-rdv-item-header">
+                        <span className="sec-rdv-item-name">{civility(pt.sexe)} {name}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: '#10B981', background: '#ECFDF5', padding: '3px 8px', borderRadius: 6 }}>{formatTime(apt.date_rdv)}</span>
+                      </div>
+                      <div className="sec-rdv-item-meta"><Activity size={12} /> {apt.motif || apt.notes || 'Consultation de suivi'}</div>
+                      <div className="sec-rdv-item-meta"><Phone size={12} /> {pt.telephone || 'Non renseigné'} • {pt.assurance || 'Aucune'}</div>
 
-                return (
-                  <div key={apt.id} style={{ borderRadius:'10px', padding:'12px 14px', marginBottom:'8px', background: isConf ? '#FAFAFA' : '#FFF7F7', border:`0.5px solid ${isConf ? '#E5E7EB' : '#FCA5A5'}` }}>
-                    {/* Name + badge */}
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'6px' }}>
-                      <span style={{ fontSize:'13px', fontWeight:700, color:'#0F172A', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, marginRight:'6px', fontFamily:"'DM Sans', sans-serif" }}>{name}</span>
-                      <span style={{ background: isConf ? '#EFF6FF' : '#FFFBEB', color: isConf ? '#1D4ED8' : '#92400E', fontSize:'10px', fontWeight:700, padding:'2px 6px', borderRadius:'6px', whiteSpace:'nowrap', flexShrink:0, fontFamily:"'DM Sans', sans-serif" }}>
-                        {isConf ? 'Confirmé' : 'Non confirmé'}
-                      </span>
+                      <div className="sec-rdv-item-actions">
+                        <button className="sec-rdv-btn add" onClick={() => handleAjouterSalle(apt)}>
+                          Ajouter à la salle
+                        </button>
+                        <button className="sec-rdv-btn cancel" onClick={() => handleAnnulerRdv(apt)}>
+                          Annuler
+                        </button>
+                      </div>
                     </div>
-
-                    {/* Meta info — FIX 4 */}
-                    <div style={{ display:'flex', flexDirection:'column', gap:'2px', marginBottom:'8px' }}>
-                      <span style={{ fontSize:'11.5px', color:'#6B7280', lineHeight:1.7, fontFamily:"'DM Sans', sans-serif" }}>
-                        🕐 <span style={{ fontFamily:"'JetBrains Mono', monospace" }}>{apt.time}</span> · {pt.assurance || 'Aucune'}
-                      </span>
-                      <span style={{ fontSize:'11.5px', color:'#6B7280', lineHeight:1.7, display:'flex', alignItems:'center', gap:'4px', fontFamily:"'DM Sans', sans-serif" }}>
-                        <PhoneIcon color="#9CA3AF" /> {pt.telephone || '---'}
-                      </span>
-                      <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:'11px', color:'#6B7280', lineHeight:1.7 }}>CIN: {pt.cin || '---'}</span>
-                    </div>
-
-                    {/* Buttons */}
-                    <div style={{ display:'flex', gap:'6px', marginTop:'8px' }}>
-                      <button type="button" onClick={() => handleAjouterSalle(apt)}
-                        style={{ flex:1, background:'#0B1628', color:'#FFF', border:'none', borderRadius:'7px', padding:'7px 10px', fontSize:'11.5px', fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-                        Ajouter à la salle
-                      </button>
-                      <button type="button" onClick={() => handleAnnulerRdv(apt)}
-                        style={{ flex:1, background:'#FFF', color:'#EF4444', border:'0.5px solid #FCA5A5', borderRadius:'7px', padding:'7px 10px', fontSize:'11.5px', fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans', sans-serif" }}>
-                        Annuler RDV
-                      </button>
-                    </div>
+                  );
+                })}
+                {confirmes.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>
+                    <CalendarPlus size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                    Aucun rendez-vous à venir aujourd'hui.
                   </div>
-                );
-              })}
-              {rdvInList.length === 0 && (
-                <div style={{ textAlign:'center', padding:'28px', fontSize:'13px', color:'#9CA3AF', fontFamily:"'DM Sans', sans-serif" }}>Aucun RDV planifié</div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ══ ACTION BAR — FIX 6: direct child of root, never scrolls ══ */}
-      <div style={{ height:66, flexShrink:0, background:'#0B1628', display:'flex', alignItems:'center', padding:'0 20px', gap:14 }}>
-
-        <span style={{ fontSize:'9.5px', textTransform:'uppercase', letterSpacing:'0.1em', color:'rgba(255,255,255,0.3)', fontWeight:700, flexShrink:0, fontFamily:"'DM Sans', sans-serif" }}>
-          Prochain patient
-        </span>
-
-        <div style={{ flex:1, display:'flex', alignItems:'center', gap:'10px', overflow:'hidden' }}>
-          {nextPatient ? (() => {
-            const name = getPatientFullName(patients, nextPatient.patientId);
-            const pt   = patients.find((p: any) => p.id === nextPatient.patientId) || {};
-            const wMin = getWaitMin(nextPatient.arrivalTime);
-            return (
-              <>
-                <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'#1A56DB', color:'#FFF', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:700, flexShrink:0, fontFamily:"'DM Sans', sans-serif" }}>
-                  {getInitials(name)}
-                </div>
-                <div style={{ overflow:'hidden' }}>
-                  <div style={{ fontSize:'13px', fontWeight:700, color:'#FFF', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontFamily:"'DM Sans', sans-serif" }}>{name}</div>
-                  <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.45)', display:'flex', gap:'4px', alignItems:'center', flexWrap:'wrap', fontFamily:"'DM Sans', sans-serif" }}>
-                    <span>{nextPatient.type}</span>
-                    <span>·</span>
-                    <span>{pt.assurance || 'Aucune'}</span>
-                    <span>· Attend depuis</span>
-                    <span style={{ color:'#F59E0B', fontFamily:"'JetBrains Mono', monospace", fontWeight:700 }}>{wMin}min</span>
+        {/* ── ACTION BAR (Bottom Sticky) ── */}
+        <div className="sec-action-bar">
+          <span className="sec-ab-label">Prochain appel</span>
+          <div className="sec-ab-patient">
+            {nextPatient ? (() => {
+              const pt = nextPatient.patients || {};
+              const av = getAvatarColor(pt.id || nextPatient.id);
+              return (
+                <>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: av.bg, color: av.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>
+                    {getInitials(pt.prenom, pt.nom)}
                   </div>
-                </div>
-              </>
-            );
-          })() : (
-            <span style={{ fontSize:'13px', color:'rgba(255,255,255,0.4)', fontFamily:"'DM Sans', sans-serif" }}>Aucun patient en attente</span>
-          )}
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#FFF' }}>{pt.prenom} {pt.nom}</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{nextPatient.motif || 'En attente'}</div>
+                  </div>
+                </>
+              );
+            })() : (
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>La salle d'attente est vide</span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button
+              className="sec-ab-btn outline"
+              onClick={() => setNextPatientIndex(i => i + 1)}
+              disabled={enAttente.length <= 1}
+            >
+              Patient suivant 👉
+            </button>
+            <button
+              className="sec-ab-btn"
+              onClick={() => handleCommencer(nextPatient)}
+              disabled={!nextPatient}
+            >
+              <PlayCircle size={18} /> Appeler en salle
+            </button>
+          </div>
         </div>
-
-        <div style={{ width:'0.5px', height:'38px', background:'rgba(255,255,255,0.1)', flexShrink:0 }} />
-
-        {/* FIX 1 — stats with JetBrains Mono */}
-        <div style={{ display:'flex', gap:'20px', flexShrink:0 }}>
-          {[
-            { label:'En attente', val: arriveApts.length,               color:'#FFF'     },
-            { label:'Terminés',   val: termineApts.length,              color:'#FFF'     },
-            { label:'En salle',   val: enConsultApts.length,            color:'#10B981'  },
-            { label:'MAD / jour', val: todayRevenue.toLocaleString('fr-FR'), color:'#F59E0B', isStr:true },
-          ].map(s => (
-            <div key={s.label} style={{ textAlign:'center' }}>
-              <div style={{ fontSize:'17px', fontWeight:800, fontFamily:"'JetBrains Mono', monospace", color:s.color, lineHeight:1.1 }}>{s.val}</div>
-              <div style={{ fontSize:'9px', textTransform:'uppercase', letterSpacing:'0.05em', color:'rgba(255,255,255,0.35)', marginTop:'2px', fontFamily:"'DM Sans', sans-serif" }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ width:'0.5px', height:'38px', background:'rgba(255,255,255,0.1)', flexShrink:0 }} />
-
-        <button type="button" onClick={() => { if (nextPatient) handleCommencer(nextPatient); }} disabled={!nextPatient}
-          style={{ background: nextPatient ? '#10B981' : 'rgba(16,185,129,0.35)', color:'#FFF', border:'none', borderRadius:'9px', padding:'9px 16px', fontSize:'12px', fontWeight:700, cursor: nextPatient ? 'pointer' : 'default', display:'flex', alignItems:'center', gap:'6px', fontFamily:"'DM Sans', sans-serif", whiteSpace:'nowrap', flexShrink:0 }}>
-          <span>📞</span> Appeler ce patient
-        </button>
-
-        <button type="button" onClick={() => setNextPatientIndex(i => i + 1)} disabled={arriveApts.length <= 1}
-          style={{ background:'rgba(255,255,255,0.07)', color: arriveApts.length > 1 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:'9px', padding:'9px 12px', fontSize:'12px', cursor: arriveApts.length > 1 ? 'pointer' : 'default', fontFamily:"'DM Sans', sans-serif", whiteSpace:'nowrap', flexShrink:0 }}>
-          Suivant →
-        </button>
-
       </div>
-    </div>
+    </>
   );
 });
 

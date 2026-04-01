@@ -30,7 +30,7 @@ function RootRedirect() {
   const { isAuthenticated, isInitializing, role } = useAppContext()
   if (isInitializing) return null
   if (!isAuthenticated) return <LandingPage />
-  
+
   if (role === 'secretaire') {
     return <Navigate to="/secretaire" replace />
   }
@@ -41,83 +41,83 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<RootRedirect />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/verification" element={<VerificationPage />} />
+        {/* Public routes */}
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/verification" element={<VerificationPage />} />
 
-          {/* Connected App Routes — require authentication */}
-          <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-            {/* SECRÉTAIRE & DOCTEUR (Shared Access) */}
-            <Route path="/secretaire" element={<SecretaireDashboard />} />
-            <Route path="/salle-attente" element={<WaitingRoomPage />} />
-            <Route path="/agenda" element={<AppointmentsPage />} />
-            <Route path="/facturation" element={<BillingPage />} />
-            <Route path="/facturation/:id" element={<BillingPage />} />
-            <Route path="/patients" element={<PatientsPage />} />
-            <Route path="/patients/:id" element={<PatientsPage />} />
+        {/* Connected App Routes — require authentication */}
+        <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+          {/* SECRÉTAIRE & DOCTEUR (Shared Access) */}
+          <Route path="/secretaire" element={<SecretaireDashboard />} />
+          <Route path="/salle-attente" element={<WaitingRoomPage />} />
+          <Route path="/agenda" element={<AppointmentsPage />} />
+          <Route path="/facturation" element={<BillingPage />} />
+          <Route path="/facturation/:id" element={<BillingPage />} />
+          <Route path="/patients" element={<PatientsPage />} />
+          <Route path="/patients/:id" element={<PatientsPage />} />
 
-            {/* DOCTEUR ONLY ROUTES */}
-            <Route 
-              path="/dashboard" 
-              element={
-                <RoleGuard role="docteur">
-                  <StatisticsPage />
-                </RoleGuard>
-              } 
-            />
-            <Route 
-              path="/ordonnances" 
-              element={
-                <RoleGuard role="docteur">
-                  <PrescriptionsPage />
-                </RoleGuard>
-              } 
-            />
-            <Route 
-              path="/equipe" 
-              element={
-                <RoleGuard role="docteur">
-                  <StaffManagementPage />
-                </RoleGuard>
-              } 
-            />
-            <Route 
-              path="/parametres" 
-              element={
-                <RoleGuard role="docteur">
-                  <SettingsPage />
-                </RoleGuard>
-              } 
-            />
-            <Route 
-              path="/consultation/:rdv_id" 
-              element={
-                <RoleGuard role="docteur">
-                  <ConsultationWorkspace />
-                </RoleGuard>
-              } 
-            />
-            <Route 
-  path="/ai-scribe" 
-  element={
-    <RoleGuard role="docteur">
-      <AiScribePage />
-    </RoleGuard>
-  } 
-/>
-            
+          {/* DOCTEUR ONLY ROUTES */}
+          <Route
+            path="/dashboard"
+            element={
+              <RoleGuard role="docteur">
+                <StatisticsPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/ordonnances"
+            element={
+              <RoleGuard role="docteur">
+                <PrescriptionsPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/equipe"
+            element={
+              <RoleGuard role="docteur">
+                <StaffManagementPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/parametres"
+            element={
+              <RoleGuard role="docteur">
+                <SettingsPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/consultation/:rdv_id"
+            element={
+              <RoleGuard role="docteur">
+                <ConsultationWorkspace />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/ai-scribe"
+            element={
+              <RoleGuard role="docteur">
+                <AiScribePage />
+              </RoleGuard>
+            }
+          />
 
-            {/* Legacy redirect logic from old /doctor or /secretary routes */}
-            <Route path="/doctor/*" element={<Navigate to="/" replace />} />
-            <Route path="/secretary/*" element={<Navigate to="/" replace />} />
-          </Route>
 
-          {/* Catch-all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+          {/* Legacy redirect logic from old /doctor or /secretary routes */}
+          <Route path="/doctor/*" element={<Navigate to="/" replace />} />
+          <Route path="/secretary/*" element={<Navigate to="/" replace />} />
+        </Route>
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
