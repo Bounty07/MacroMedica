@@ -138,6 +138,52 @@ export default function StatisticsPage() {
   const doctorName = profile?.nom_complet || 'Docteur'
   const [salleTab, setSalleTab] = useState('actifs') // 'actifs' | 'tous'
 
+  /* ────────────────────────────────────────────────
+     MOCK DATA — shown when real data is empty
+  ────────────────────────────────────────────────── */
+  const NOW = new Date()
+  const t = (offsetMin) => new Date(NOW.getTime() - offsetMin * 60000).toISOString()
+
+  const MOCK_SALLE = [
+    {
+      id: 'mock-1', status: RDV_STATUSES.ARRIVED,
+      date_rdv: t(40), updated_at: t(22),
+      notes: 'Post-Op · Dr. Aris',
+      motif: 'Post-Op · Dr. Aris',
+      patients: { id: 'mp1', prenom: 'Thomas', nom: 'Durand', sexe: 'M' },
+    },
+    {
+      id: 'mock-2', status: RDV_STATUSES.ARRIVED,
+      date_rdv: t(25), updated_at: t(7),
+      notes: '1ère Consultation',
+      motif: '1ère Consultation',
+      patients: { id: 'mp2', prenom: 'Alice', nom: 'Mercier', sexe: 'F' },
+    },
+    {
+      id: 'mock-3', status: RDV_STATUSES.SCHEDULED,
+      date_rdv: t(50), updated_at: t(50),
+      notes: 'Renouvellement Ordonnance',
+      motif: 'Renouvellement Ordonnance',
+      patients: { id: 'mp3', prenom: 'Lucas', nom: 'Petit', sexe: 'M' },
+    },
+  ]
+
+  const MOCK_PROCHAIN = {
+    id: 'mock-rdv-0', status: RDV_STATUSES.SCHEDULED,
+    date_rdv: new Date(NOW.getTime() + 25 * 60000).toISOString(),
+    notes: 'Gastrite chronique',
+    motif: 'Gastrite chronique',
+    patients: {
+      id: 'mock-p0', prenom: 'Sophie', nom: 'Laurent', sexe: 'F',
+      date_naissance: '1982-03-14',
+      telephone: 'Dossier #SL-8842',
+      groupe_sanguin: 'A+',
+      antecedents: 'Allergie Pénicilline',
+      tension: 'Tension: 12/8',
+      poids: 64,
+    },
+  }
+
   /* ── Derived slices ── */
   const enAttente = useMemo(() =>
     rdvList.filter(r => r.status === RDV_STATUSES.ARRIVED)
@@ -153,22 +199,25 @@ export default function StatisticsPage() {
       .sort((a, b) => new Date(a.date_rdv) - new Date(b.date_rdv)),
     [rdvList])
 
-  const prochainRdv    = confirmes[0] || null
-  const prochainPatient = prochainRdv?.patients || null
+  const useMock = rdvList.length === 0
+
+  const prochainRdv     = confirmes[0]               || (useMock ? MOCK_PROCHAIN      : null)
+  const prochainPatient = prochainRdv?.patients       || null
 
   /* ── Stats ── */
-  const salleCount    = enAttente.length + enConsultation.length
-  const confirmedCount = rdvList.filter(r =>
+  const salleCount     = useMock ? 4 : enAttente.length + enConsultation.length
+  const confirmedCount = useMock ? 12 : rdvList.filter(r =>
     [RDV_STATUSES.SCHEDULED, RDV_STATUSES.ARRIVED, RDV_STATUSES.IN_CONSULTATION].includes(r.status)
   ).length
-  const totalRdv = rdvList.length
+  const totalRdv = useMock ? 15 : rdvList.length
 
   const revenuJour = useMemo(() => {
+    if (useMock) return 1240
     const today = new Date().toLocaleDateString('fr-CA', { timeZone: TZ })
     return consultations
       .filter(c => c.statut === 'paye' && c.date_consult?.startsWith(today))
       .reduce((s, c) => s + (c.montant || 0), 0)
-  }, [consultations])
+  }, [consultations, useMock])
 
   /* ── Salle d'attente Table List ── */
   const activeList = useMemo(() => [
@@ -176,9 +225,13 @@ export default function StatisticsPage() {
     ...enAttente.map(r => ({ ...r, _order: 1 })),
   ], [enAttente, enConsultation])
 
-  const salleList = salleTab === 'actifs' ? activeList : rdvList.filter(r =>
-    [RDV_STATUSES.ARRIVED, RDV_STATUSES.IN_CONSULTATION, RDV_STATUSES.COMPLETED, RDV_STATUSES.ABSENT].includes(r.status)
-  )
+  const salleList = useMock
+    ? MOCK_SALLE
+    : salleTab === 'actifs'
+      ? activeList
+      : rdvList.filter(r =>
+          [RDV_STATUSES.ARRIVED, RDV_STATUSES.IN_CONSULTATION, RDV_STATUSES.COMPLETED, RDV_STATUSES.ABSENT].includes(r.status)
+        )
 
   /* ── Actions ── */
   const transitionStatus = useCallback(async (rdvId, target) => {
