@@ -1,4 +1,4 @@
-export type Role = 'medecin' | 'secretaire'
+export type Role = 'medecin' | 'secretaire' | 'admin'
 export type StatutConsultation = 'paye' | 'credit' | 'annule'
 export type StatutAttente = 'en_attente' | 'en_consultation' | 'termine' | 'annule'
 export type TypeDocument = 'recu_consultation' | 'fiche_cnss' | 'ordonnance' | 'recu_paiement'
@@ -29,15 +29,29 @@ export interface Patient {
   prenom: string
   telephone?: string
   date_naissance?: string
+  cin?: string
   email?: string
   adresse?: string
-  ville?: string
-  sexe?: 'homme' | 'femme'
-  groupe_sanguin?: string
   allergies?: string
   antecedents?: string
   mutuelle?: string
-  medecin_referent?: string
+  numero_cnss?: string
+  created_at: string
+}
+
+export interface SigneVital {
+  id: string
+  patient_id: string
+  cabinet_id: string
+  poids?: number
+  taille?: number
+  imc?: number
+  tension_systolique?: number
+  tension_diastolique?: number
+  frequence_cardiaque?: number
+  temperature?: number
+  saturation?: number
+  measured_at: string
   created_at: string
 }
 

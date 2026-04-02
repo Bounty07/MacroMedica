@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import {
-  Patient, Consultation, StatutAttente, Rdv, TypeDocument, TypeMessage
+  Patient, Consultation, StatutAttente, Rdv, TypeDocument, TypeMessage, SigneVital
 } from '../types'
 
 // — AUTH —
@@ -120,6 +120,48 @@ export const updatePatient = async (
     .single()
   if (error) throw error
   return data
+}
+
+// — SIGNES VITAUX —
+export const getSignesVitauxByPatient = async (
+  patientId: string
+) => {
+  const { data, error } = await supabase
+    .from('signes_vitaux')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('measured_at', { ascending: false })
+
+  if (error) throw error
+  return data as SigneVital[]
+}
+
+export const createSigneVital = async (
+  vitals: Omit<SigneVital, 'id' | 'created_at'>
+) => {
+  const { data, error } = await supabase
+    .from('signes_vitaux')
+    .insert([vitals])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as SigneVital
+}
+
+export const updateSigneVital = async (
+  id: string,
+  updates: Partial<SigneVital>
+) => {
+  const { data, error } = await supabase
+    .from('signes_vitaux')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as SigneVital
 }
 
 export const deletePatient = async (
@@ -325,6 +367,24 @@ export const getOrdonnances = async (
     `)
     .eq('type_document', 'ordonnance')
     .eq('cabinet_id', cabinetId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export const getOrdonnancesByPatient = async (
+  patientId: string
+) => {
+  const { data, error } = await supabase
+    .from('documents')
+    .select(`
+      *,
+      patients (nom, prenom, telephone),
+      consultations (notes, date_consult)
+    `)
+    .eq('type_document', 'ordonnance')
+    .eq('patient_id', patientId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
