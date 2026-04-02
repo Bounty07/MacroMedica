@@ -30,6 +30,7 @@ export function AppProvider({ children }) {
   const [toasts, setToasts] = useState([])
   const [globalModal, setGlobalModal] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const [inboxAlertCount, setInboxAlertCount] = useState(0)
   const [notificationPrefs, setNotificationPrefs] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(PREFS_KEY) || '{"email":true,"browser":true,"reminders":true}')
@@ -253,11 +254,17 @@ export function AppProvider({ children }) {
   }
 
   const role = profile?.role || 'docteur'
+  const isSecretary = role === 'secretaire'
+  const isAdmin = role === 'admin' || role === 'docteur'
+  const workspaceRole = isSecretary ? 'secretaire' : 'admin'
 
   const value = useMemo(() => ({
     user,
     profile,
     role,
+    isSecretary,
+    isAdmin,
+    workspaceRole,
     cabinet: profile?.clinics,
     cabinetId: profile?.cabinet_id,
     currentUser: profile
@@ -269,6 +276,7 @@ export function AppProvider({ children }) {
     globalModal,
     confirmDialog,
     notificationPrefs,
+    inboxAlertCount,
 
     login,
     logout,
@@ -280,6 +288,7 @@ export function AppProvider({ children }) {
     closeConfirmation() { setConfirmDialog(null) },
     dismissToast(id) { setToasts((c) => c.filter((t) => t.id !== id)) },
     notify(toast) { pushToast(toast) },
+    setInboxAlertCount,
 
     // Fallbacks for un-migrated components
     patients,
@@ -301,7 +310,7 @@ export function AppProvider({ children }) {
         loadConsultations(profile.cabinet_id)
       }
     },
-  }), [user, profile, role, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, patients, rdvList, consultations, waitingList])
+  }), [user, profile, role, isSecretary, isAdmin, workspaceRole, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, inboxAlertCount, patients, rdvList, consultations, waitingList])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
