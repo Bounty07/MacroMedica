@@ -4,6 +4,8 @@ import { useAppContext } from '../../context/AppContext'
 import { RDV_STATUSES, isValidTransition } from '../../lib/workflow'
 import { supabase } from '../../lib/supabase'
 import PinLock from '../../components/common/PinLock'
+import PracticeInsightsCard from '../../components/dashboard/PracticeInsightsCard'
+import { usePracticeInsights } from '../../hooks/usePracticeInsights'
 import {
   CalendarPlus, Bell, Trash2, Phone, MoreHorizontal,
   PlayCircle, FileText, StickyNote, ChevronRight, Clock,
@@ -137,6 +139,18 @@ export default function StatisticsPage() {
   const dateStr = useLiveClock()
   const doctorName = profile?.nom_complet || 'Docteur'
   const [salleTab, setSalleTab] = useState('actifs') // 'actifs' | 'tous'
+  const practiceInsightsRefreshToken = useMemo(() => (
+    [
+      rdvList.length,
+      consultations.length,
+      rdvList[0]?.updated_at || rdvList[0]?.created_at || rdvList[0]?.id || 'rdv-none',
+      consultations[0]?.created_at || consultations[0]?.id || 'consult-none',
+    ].join(':')
+  ), [consultations, rdvList])
+  const { metrics: practiceMetrics, insight: practiceInsight } = usePracticeInsights({
+    cabinetId: profile?.cabinet_id,
+    refreshToken: practiceInsightsRefreshToken,
+  })
 
   /* ────────────────────────────────────────────────
      MOCK DATA — shown when real data is empty
@@ -779,6 +793,10 @@ export default function StatisticsPage() {
             </div>
           </div>
         </div>
+
+        {practiceInsight ? (
+          <PracticeInsightsCard insight={practiceInsight} metrics={practiceMetrics} />
+        ) : null}
 
       </div>
     </PinLock>

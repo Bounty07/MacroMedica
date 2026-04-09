@@ -1,260 +1,276 @@
-import { useState, useRef, useEffect } from 'react'
+import { Copy, Mic, PauseCircle, Save, Sparkles } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useAppContext } from '../../context/AppContext'
+import { useAudioRecorder } from '../../hooks/useAudioRecorder'
+import {
+  DEFAULT_SCRIBE_LANGUAGE_MODE,
+  getScribeLanguageOption,
+  requestAiScribeLetter,
+  SCRIBE_LANGUAGE_OPTIONS,
+} from '../../lib/aiScribe'
+import { savePatientConsultation } from '../../lib/consultationNotes'
 import { supabase } from '../../lib/supabase'
 
+type PatientRecord = {
+  id: string | number
+  cabinet_id?: string | null
+  nom?: string | null
+  prenom?: string | null
+  date_naissance?: string | null
+  antecedents?: string | null
+  allergies?: string | null
+}
+
+function formatRecordingDuration(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.round((durationMs || 0) / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
 export default function AiScribeCard() {
+  const { notify } = useAppContext()
   const [notes, setNotes] = useState('')
   const [letter, setLetter] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
-  const [recording, setRecording] = useState(false)
-  const [volume, setVolume] = useState(0)
-  const [transcript, setTranscript] = useState('')
-  const [patients, setPatients] = useState<any[]>([])
+  const [patients, setPatients] = useState<PatientRecord[]>([])
   const [selectedPatient, setSelectedPatient] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [languageMode, setLanguageMode] = useState(DEFAULT_SCRIBE_LANGUAGE_MODE)
 
-  const recognitionRef = useRef<any>(null)
-  const audioContextRef = useRef<any>(null)
-  const analyserRef = useRef<any>(null)
-  const animationRef = useRef<any>(null)
-  const streamRef = useRef<any>(null)
+  const recorder = useAudioRecorder()
+  const selectedLanguage = useMemo(
+    () => getScribeLanguageOption(languageMode),
+    [languageMode],
+  )
+  const selectedPatientRecord = patients.find((patient) => String(patient.id) === String(selectedPatient))
+  const hasAudio = Boolean(recorder.audioBase64)
+  const bars = [3, 5, 8, 5, 3, 7, 4, 6, 8, 4]
 
   useEffect(() => {
     async function fetchPatients() {
-      const { data } = await supabase.from('patients').select('id, nom, prenom').order('nom')
-      if (data) setPatients(data)
+      const { data } = await supabase
+        .from('patients')
+        .select('id, cabinet_id, nom, prenom, date_naissance, antecedents, allergies')
+        .order('nom')
+
+      if (data) {
+        setPatients(data)
+      }
     }
+
     fetchPatients()
-    return () => stopAudio()
+
+    return () => {
+      recorder.stopRecording().catch(() => {})
+    }
   }, [])
 
-  function stopAudio() {
-    if (animationRef.current) cancelAnimationFrame(animationRef.current)
-    if (streamRef.current) streamRef.current.getTracks().forEach((t: any) => t.stop())
-    if (audioContextRef.current) audioContextRef.current.close()
-    setVolume(0)
-  }
-
-  async function startVolumeDetection() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
-      const audioContext = new AudioContext()
-      audioContextRef.current = audioContext
-      const analyser = audioContext.createAnalyser()
-      analyserRef.current = analyser
-      analyser.fftSize = 256
-      const source = audioContext.createMediaStreamSource(stream)
-      source.connect(analyser)
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-
-      function tick() {
-        analyser.getByteFrequencyData(dataArray)
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
-        setVolume(Math.min(100, avg * 2))
-        animationRef.current = requestAnimationFrame(tick)
-      }
-      tick()
-    } catch {
-      setError("Microphone inaccessible.")
+  useEffect(() => {
+    if (recorder.error) {
+      setError(recorder.error)
     }
-  }
+  }, [recorder.error])
 
-  function toggleRecording() {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      setError("Utilisez Chrome.")
-      return
-    }
-
-    if (recording) {
-      recognitionRef.current?.stop()
-      stopAudio()
-      setRecording(false)
-      setTranscript('')
-      return
-    }
-
+  const toggleRecording = async () => {
     setError('')
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'fr-FR'
-    recognition.continuous = true
-    recognition.interimResults = true
 
-    recognition.onstart = () => {
-      setRecording(true)
-      startVolumeDetection()
+    try {
+      await recorder.toggleRecording()
+    } catch (recordingError) {
+      setError(recordingError instanceof Error ? recordingError.message : 'Microphone inaccessible.')
     }
-
-    recognition.onresult = (event: any) => {
-      let final = ''
-      let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          final += event.results[i][0].transcript + ' '
-        } else {
-          interim += event.results[i][0].transcript
-        }
-      }
-      if (final) setNotes(prev => prev + final)
-      setTranscript(interim)
-    }
-
-    recognition.onerror = () => {
-      stopAudio()
-      setRecording(false)
-      setTranscript('')
-    }
-
-    recognition.onend = () => {
-      stopAudio()
-      setRecording(false)
-      setTranscript('')
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
   }
 
-  async function generateLetter() {
-    if (!notes.trim()) return
-    if (recording) {
-      recognitionRef.current?.stop()
-      stopAudio()
-      setRecording(false)
-    }
+  const generateLetter = async () => {
+    if (!notes.trim() && !hasAudio) return
+
     setLoading(true)
     setError('')
     setLetter('')
 
-    const { data, error: fnError } = await supabase.functions.invoke('ai-scribe', {
-      body: { notes }
-    })
+    try {
+      if (recorder.isRecording) {
+        await recorder.stopRecording()
+      }
 
-    if (fnError || data?.error) {
-      setError("Erreur IA.")
+      const nextLetter = await requestAiScribeLetter({
+        supabaseClient: supabase,
+        patient: selectedPatientRecord,
+        notes,
+        audioBase64: recorder.audioBase64,
+        audioMimeType: recorder.audioMimeType,
+        languageMode,
+      })
+
+      setLetter(nextLetter)
+    } catch (generationError) {
+      setError(generationError instanceof Error ? generationError.message : 'Erreur IA.')
+    } finally {
       setLoading(false)
-      return
     }
-
-    setLetter(data.letter)
-    setLoading(false)
   }
 
-  async function copyText() {
+  const copyText = async () => {
     await navigator.clipboard.writeText(letter)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function saveToPatientRecord() {
-    if (!selectedPatient || !letter) return
+  const saveToPatientRecord = async () => {
+    if (!selectedPatientRecord?.id || !letter) return
+
     setIsSaving(true)
-    const { error: dbError } = await supabase.from('consultations').insert([{
-      patient_id: selectedPatient,
-      notes: letter,
-      statut: 'Terminée',
-      date_consult: new Date().toISOString()
-    }])
-    setIsSaving(false)
-    if (!dbError) {
+    setError('')
+
+    try {
+      await savePatientConsultation({
+        supabaseClient: supabase,
+        cabinetId: selectedPatientRecord.cabinet_id,
+        patientId: selectedPatientRecord.id,
+        notes: letter,
+        statut: 'paye',
+      })
+
       setNotes('')
       setLetter('')
       setSelectedPatient('')
-      alert("Sauvegardé avec succès.")
-    } else {
-      setError("Erreur de sauvegarde.")
+      recorder.clearRecording()
+      notify({
+        title: 'Consultation sauvegardee',
+        description: 'La note a ete ajoutee au dossier patient.',
+      })
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Erreur de sauvegarde.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
-  const bars = [3, 5, 8, 5, 3, 7, 4, 6, 8, 4]
-
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
-          <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-          </svg>
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100">
+          <Sparkles className="h-5 w-5 text-sky-600" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-800">Assistant IA</h1>
+          <h1 className="text-xl font-bold text-gray-800">IA Scribe / Dictee</h1>
+          <p className="text-sm text-gray-500">Enregistrez la voix, puis laissez Gemini rediger la note en francais medical.</p>
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-        <select 
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
+        <select
           value={selectedPatient}
-          onChange={(e) => setSelectedPatient(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-gray-50 text-gray-800 text-sm mb-4"
+          onChange={(event) => setSelectedPatient(event.target.value)}
+          className="mb-4 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
         >
-          <option value="">-- Sélectionnez un patient --</option>
-          {patients.map(p => (
-            <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>
+          <option value="">-- Selectionnez un patient --</option>
+          {patients.map((patient) => (
+            <option key={patient.id} value={patient.id}>{patient.nom} {patient.prenom}</option>
           ))}
         </select>
+
+        <select
+          value={languageMode}
+          onChange={(event) => setLanguageMode(event.target.value)}
+          className="mb-4 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+        >
+          {SCRIBE_LANGUAGE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Audio capture</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {recorder.isRecording
+                  ? `Enregistrement en cours (${formatRecordingDuration(recorder.recordingDurationMs)})`
+                  : hasAudio
+                    ? `Audio pret (${formatRecordingDuration(recorder.recordingDurationMs)})`
+                    : 'Pret a enregistrer une commande clinique'}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">{selectedLanguage.helper}</p>
+            </div>
+            <div className="flex items-end gap-0.5">
+              {bars.map((base, index) => (
+                <div
+                  key={index}
+                  className={`w-1 rounded-full transition-all duration-75 ${
+                    recorder.isRecording ? 'bg-sky-500' : 'bg-slate-200'
+                  }`}
+                  style={{ height: `${Math.max(4, (recorder.audioLevel / 100) * base * 4)}px` }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
 
         <div className="relative">
           <textarea
             value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Notes..."
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Ajoutez si besoin des precisions cliniques, un motif, ou des observations complementaires."
             rows={5}
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 text-gray-800 resize-none text-sm"
+            className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
-          {transcript && <p className="text-xs text-gray-400 italic px-1 mt-1">{transcript}...</p>}
         </div>
 
         <button
           onClick={toggleRecording}
-          className={`w-full flex items-center justify-center gap-3 py-3 rounded-lg border transition-all font-medium text-sm ${
-            recording ? 'bg-red-50 border-red-300 text-red-600' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+          disabled={loading}
+          className={`flex w-full items-center justify-center gap-3 rounded-lg border py-3 text-sm font-medium transition-all ${
+            recorder.isRecording
+              ? 'border-red-300 bg-red-50 text-red-600'
+              : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
           }`}
         >
-          {recording ? (
-            <>
-              <div className="flex items-end gap-0.5 h-5">
-                {bars.map((base, i) => (
-                  <div key={i} className="w-1 bg-red-500 rounded-full transition-all duration-75" style={{ height: `${Math.max(4, (volume / 100) * base * 4)}px` }} />
-                ))}
-              </div>
-              <span>Enregistrement en cours</span>
-            </>
-          ) : (
-            "Dicter"
-          )}
+          {recorder.isRecording ? <PauseCircle className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          <span>{recorder.isRecording ? 'Arreter lenregistrement' : 'Enregistrer la voix'}</span>
         </button>
 
         <button
           onClick={generateLetter}
-          disabled={loading || !notes.trim()}
-          className="w-full py-3 bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:opacity-40 transition-colors font-medium text-sm"
+          disabled={loading || (!notes.trim() && !hasAudio)}
+          className="w-full rounded-lg bg-sky-600 py-3 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-40"
         >
-          {loading ? "Rédaction..." : "Générer la lettre"}
+          {loading ? 'Redaction...' : 'Generer la lettre'}
         </button>
       </div>
 
-      {error && <p className="text-red-600 text-sm p-3 bg-red-50 rounded-lg">{error}</p>}
+      {error ? <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
 
-      {letter && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-semibold text-gray-700">Lettre générée</span>
+      {letter ? (
+        <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700">Lettre generee</span>
             <div className="flex gap-2">
-              <button onClick={copyText} className="px-4 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                {copied ? "Copié !" : "Copier"}
+              <button
+                onClick={copyText}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                <Copy className="h-4 w-4" />
+                {copied ? 'Copie !' : 'Copier'}
               </button>
-              <button onClick={saveToPatientRecord} disabled={isSaving || !selectedPatient} className="px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
-                {isSaving ? "Sauvegarde..." : "Enregistrer au dossier"}
+              <button
+                onClick={saveToPatientRecord}
+                disabled={isSaving || !selectedPatient}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {isSaving ? 'Sauvegarde...' : 'Enregistrer au dossier'}
               </button>
             </div>
           </div>
-          <div className="bg-gray-50 rounded-lg p-5 border border-gray-100">
-            <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">{letter}</p>
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-5">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{letter}</p>
           </div>
-        </div>  
-      )}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -11,8 +11,7 @@ import {
   UsersRound,
   X,
   ChevronLeft,
-  ChevronRight,
-  Bot
+  ChevronRight
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { getSidebarForRole } from '../../lib/sidebarConfig'
@@ -32,7 +31,6 @@ const iconMap = {
   'settings-2': Settings2,
   stethoscope: Stethoscope,
   'users-round': UsersRound,
-  'bot': Bot,
 }
 
 const CustomHoverTooltip = ({ children, content }) => (
@@ -91,13 +89,15 @@ function SidebarLink({ item, onClick, isCollapsed }) {
           </span>
 
           <span
-            className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-in-out ${
+            className={`overflow-hidden transition-all duration-200 ease-in-out ${
               isCollapsed
                 ? 'max-w-0 opacity-0 -translate-x-3 delay-0'
-                : 'max-w-[200px] opacity-100 translate-x-0 delay-100'
+                : 'max-w-[180px] opacity-100 translate-x-0 delay-100'
             }`}
           >
-            {item.label}
+            <span className="block break-words leading-tight whitespace-normal">
+              {item.label}
+            </span>
           </span>
         </>
       )}

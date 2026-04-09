@@ -10,9 +10,10 @@ import LandingPage from './pages/LandingPage'
 
 // Shared pages
 import AppointmentsPage from './pages/dashboard/AppointmentsPage'
+import AnalyticsDashboardPage from './pages/dashboard/AnalyticsDashboardPage'
 import BillingPage from './pages/dashboard/BillingPage'
 import PatientsPage from './pages/dashboard/PatientsPage'
-import PrescriptionsPage from './pages/dashboard/PrescriptionsPage'
+import BilingualPrescriptionsPage from './pages/dashboard/BilingualPrescriptionsPage'
 import StatisticsPage from './pages/dashboard/StatisticsPage'
 import WaitingRoomPage from './pages/dashboard/WaitingRoomPage'
 import StaffManagementPage from './pages/dashboard/StaffManagementPage'
@@ -20,7 +21,6 @@ import SettingsPage from './pages/dashboard/SettingsPage'
 
 // Role-specific workspaces
 import ConsultationWorkspace from './pages/dashboard/ConsultationWorkspace'
-import AiScribePage from './pages/AiScribePage'
 
 // Role redirect component based on new requirements
 import { useAppContext } from './context/AppContext'
@@ -68,10 +68,18 @@ function App() {
             }
           />
           <Route
+            path="/analytics"
+            element={
+              <RoleGuard role="docteur">
+                <AnalyticsDashboardPage />
+              </RoleGuard>
+            }
+          />
+          <Route
             path="/ordonnances"
             element={
               <RoleGuard role="docteur">
-                <PrescriptionsPage />
+                <BilingualPrescriptionsPage />
               </RoleGuard>
             }
           />
@@ -99,16 +107,6 @@ function App() {
               </RoleGuard>
             }
           />
-          <Route
-            path="/ai-scribe"
-            element={
-              <RoleGuard role="docteur">
-                <AiScribePage />
-              </RoleGuard>
-            }
-          />
-
-
           {/* Legacy redirect logic from old /doctor or /secretary routes */}
           <Route path="/doctor/*" element={<Navigate to="/" replace />} />
           <Route path="/secretary/*" element={<Navigate to="/" replace />} />

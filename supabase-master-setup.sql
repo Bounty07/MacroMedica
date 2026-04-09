@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.cabinets (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   nom TEXT NOT NULL,
+  specialite TEXT,
   ville TEXT,
   telephone TEXT,
   adresse TEXT,
@@ -28,6 +29,9 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cabinets' AND column_name='adresse') THEN
     ALTER TABLE public.cabinets ADD COLUMN adresse TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cabinets' AND column_name='specialite') THEN
+    ALTER TABLE public.cabinets ADD COLUMN specialite TEXT;
   END IF;
 END $$;
 
@@ -56,11 +60,19 @@ CREATE TABLE IF NOT EXISTS public.patients (
   groupe_sanguin TEXT,
   allergies TEXT,
   antecedents TEXT,
+  notes_medecin TEXT,
   mutuelle TEXT,
   medecin_referent TEXT,
   num_dossier TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='notes_medecin') THEN
+    ALTER TABLE public.patients ADD COLUMN notes_medecin TEXT;
+  END IF;
+END $$;
 
 -- CONSULTATIONS
 CREATE TABLE IF NOT EXISTS public.consultations (

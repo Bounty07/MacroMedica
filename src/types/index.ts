@@ -8,6 +8,7 @@ export interface Cabinet {
   id: string
   tenant_id: string
   nom: string
+  specialite?: string
   adresse?: string
   ville?: string
   telephone?: string
@@ -34,6 +35,7 @@ export interface Patient {
   adresse?: string
   allergies?: string
   antecedents?: string
+  notes_medecin?: string
   mutuelle?: string
   numero_cnss?: string
   created_at: string

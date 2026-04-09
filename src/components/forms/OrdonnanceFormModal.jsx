@@ -5,10 +5,11 @@ import Modal from '../common/Modal'
 import { useAppContext } from '../../context/AppContext'
 import { useCabinetId } from '../../hooks/useCabinetId'
 import { getPatients, createConsultation, createDocument } from '../../lib/api'
+import { createEmptyPrescriptionMedication } from '../../lib/prescriptionUtils'
 import { supabase } from '../../lib/supabase'
 
 function OrdonnanceFormModal({ open, onClose, onSuccess }) {
-  const { notify, profile, cabinet } = useAppContext()
+  const { notify, profile, cabinet, specialiteConfig } = useAppContext()
   const { cabinetId } = useCabinetId()
 
   const { data: patients = [] } = useQuery({
@@ -21,8 +22,9 @@ function OrdonnanceFormModal({ open, onClose, onSuccess }) {
     patient_id: '',
     date: new Date().toISOString().split('T')[0],
     ville: '',
-    medicaments: [{ id: Date.now().toString(), nom: '', posologie: '', duree: '' }],
+    medicaments: [createEmptyPrescriptionMedication()],
     instructions: '',
+    instructions_en: '',
     signe: true,
     nomMedecin: '',
     specialite: '',
@@ -39,17 +41,18 @@ function OrdonnanceFormModal({ open, onClose, onSuccess }) {
         patient_id: '',
         date: new Date().toISOString().split('T')[0],
         ville: cabinet?.adresse?.split(',')[0] || cabinet?.ville || '',
-        medicaments: [{ id: Date.now().toString(), nom: '', posologie: '', duree: '' }],
+        medicaments: [createEmptyPrescriptionMedication()],
         instructions: '',
+        instructions_en: '',
         signe: true,
         nomMedecin: profile?.nom_complet || '',
-        specialite: profile?.specialite || 'Médecin généraliste',
+        specialite: specialiteConfig.label,
         adresse: cabinet?.adresse || '',
         telephone: cabinet?.telephone || '',
       })
       setError(null)
     }
-  }, [open, profile, cabinet])
+  }, [open, profile, cabinet, specialiteConfig.label])
 
   const handleMedsChange = (id, key, value) => {
     setForm(c => ({
@@ -61,7 +64,7 @@ function OrdonnanceFormModal({ open, onClose, onSuccess }) {
   const addMed = () => {
     setForm(c => ({
       ...c,
-      medicaments: [...c.medicaments, { id: Date.now().toString(), nom: '', posologie: '', duree: '' }]
+      medicaments: [...c.medicaments, createEmptyPrescriptionMedication()]
     }))
   }
 
@@ -96,8 +99,10 @@ function OrdonnanceFormModal({ open, onClose, onSuccess }) {
         date_consult: form.date,
         notes: JSON.stringify({
           type: 'ordonnance',
+          language_mode: 'fr-en',
           medicaments: form.medicaments.filter(m => m.nom.trim()),
           instructions: form.instructions,
+          instructions_en: form.instructions_en,
           ville: form.ville,
           signe: form.signe,
           medecin: form.nomMedecin,
@@ -155,7 +160,9 @@ function OrdonnanceFormModal({ open, onClose, onSuccess }) {
             </label>
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-600">Spécialité</span>
-              <input value={form.specialite} onChange={(e) => setForm(c => ({...c, specialite: e.target.value}))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-400" />
+              <div className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600">
+                {form.specialite || 'Spécialité non configurée'}
+              </div>
             </label>
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-600">Adresse du cabinet</span>

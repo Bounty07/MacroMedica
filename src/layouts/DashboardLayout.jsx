@@ -1,7 +1,8 @@
 import { Bell, Download, Plus } from 'lucide-react'
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { Outlet, useLocation, useMatch } from 'react-router-dom'
+import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import FloatingAiHub from '../components/common/FloatingAiHub'
 import FloatingActionButton from '../components/common/FloatingActionButton'
 import AppointmentFormModal from '../components/forms/AppointmentFormModal'
 import InvoiceFormModal from '../components/forms/InvoiceFormModal'
@@ -9,6 +10,8 @@ import PatientFormModal from '../components/forms/PatientFormModal'
 import DashboardSidebar from '../components/dashboard/DashboardSidebar'
 import DashboardHeader from './DashboardHeader'
 import { useAppContext } from '../context/AppContext'
+import { useVoiceCommand } from '../hooks/useVoiceCommand'
+import { findVoicePatientMatch, normalizeVoiceAgentRoute } from '../lib/voiceCommandAgent'
 import { supabase } from '../lib/supabase'
 import { SidebarProvider, SidebarInset } from '../ui/sidebar'
 import { TooltipProvider } from '../ui/tooltip'
@@ -17,11 +20,12 @@ import { PinProvider } from '../context/PinContext'
 // Map the last path segment to a title, works for any role prefix
 const PAGE_TITLES = {
   dashboard: 'Tableau de bord',
+  analytics: 'Tableau de bord Analytique',
   agenda: 'Agenda',
   'salle-attente': "Salle d'attente",
   patients: 'Patients',
   consultation: 'Consultation',
-  ordonnances: 'Ordonnances',
+  ordonnances: 'Ordonnances / Prescriptions',
   facturation: 'Facturation',
   parametres: 'Paramètres',
   equipe: 'Gestion Équipe',
@@ -49,6 +53,7 @@ function normalizePhone(phone) {
 
 function DashboardLayout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const {
     cabinetId,
     role,
@@ -58,6 +63,7 @@ function DashboardLayout() {
     openGlobalModal,
     confirmDialog,
     closeConfirmation,
+    runVoiceCommandHandler,
   } = useAppContext()
   
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -82,6 +88,158 @@ function DashboardLayout() {
     // Skip the first segment (role prefix like 'doctor') and show the rest
     return [segments[0] || 'dashboard', ...segments.slice(1)]
   }, [location.pathname])
+
+  const findPatientForVoiceCommand = useCallback(async (patientName) => {
+    const localMatch = findVoicePatientMatch(allPatientsRef.current, patientName)
+    if (localMatch) return localMatch
+
+    if (!cabinetId) return null
+
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('id, prenom, nom, telephone')
+        .eq('cabinet_id', cabinetId)
+        .order('nom')
+
+      if (error) throw error
+
+      if (Array.isArray(data) && data.length > 0) {
+        allPatientsRef.current = data
+      }
+
+      return findVoicePatientMatch(data || [], patientName)
+    } catch (searchError) {
+      console.error('Voice patient search failed:', searchError)
+      return null
+    }
+  }, [cabinetId])
+
+  const executeCommand = useCallback(async (aiResponse) => {
+    switch (aiResponse.action) {
+      case 'navigate': {
+        const nextRoute = normalizeVoiceAgentRoute(aiResponse.payload)
+
+        if (!nextRoute) {
+          notify({
+            title: 'Commande vocale',
+            description: 'Route invalide. Utilisez /dashboard, /patients, /agenda ou /parametres.',
+            tone: 'error',
+          })
+          return false
+        }
+
+        navigate(nextRoute)
+        notify({ title: 'Commande vocale', description: `Navigation vers ${nextRoute}.` })
+        return true
+      }
+      case 'search_patient': {
+        const matchedPatient = await findPatientForVoiceCommand(aiResponse.payload)
+
+        if (!matchedPatient?.id) {
+          notify({
+            title: 'Commande vocale',
+            description: 'Patient introuvable',
+            tone: 'error',
+          })
+          return false
+        }
+
+        navigate(`/patients/${matchedPatient.id}`)
+        notify({
+          title: 'Commande vocale',
+          description: `Ouverture du dossier de ${matchedPatient.prenom || ''} ${matchedPatient.nom || ''}`.trim(),
+        })
+        return true
+      }
+      case 'add_note': {
+        const handled = await runVoiceCommandHandler('add_note', aiResponse.payload)
+        if (!handled) {
+          notify({
+            title: 'Commande vocale',
+            description: "Aucun contexte de note n'est actif sur cet ecran.",
+            tone: 'error',
+          })
+          return false
+        }
+
+        notify({
+          title: 'Commande vocale',
+          description: 'La note a ete ajoutee au contexte courant.',
+        })
+        return true
+      }
+      case 'save_record': {
+        const handled = await runVoiceCommandHandler('save-record', aiResponse.payload)
+        if (!handled) {
+          notify({
+            title: 'Commande vocale',
+            description: 'Aucune action de sauvegarde disponible sur cet ecran.',
+            tone: 'error',
+          })
+          return false
+        }
+        return true
+      }
+      case 'delete_appointment': {
+        const handled = await runVoiceCommandHandler('delete_appointment', aiResponse.payload)
+        if (!handled) {
+          notify({
+            title: 'Commande vocale',
+            description: 'Aucune suppression de rendez-vous disponible sur cet ecran.',
+            tone: 'error',
+          })
+          return false
+        }
+        return true
+      }
+      default:
+        if (!aiResponse.action) return false
+
+        {
+          const handled = await runVoiceCommandHandler(aiResponse.action, aiResponse.payload)
+          if (!handled) {
+            notify({
+              title: 'Commande vocale',
+              description: `Action non prise en charge: ${aiResponse.action}.`,
+              tone: 'error',
+            })
+            return false
+          }
+        }
+
+        return true
+    }
+  }, [findPatientForVoiceCommand, navigate, notify, runVoiceCommandHandler])
+
+  const {
+    isSupported: voiceCommandSupported,
+    isRecording: voiceCommandRecording,
+    isProcessing: voiceCommandProcessing,
+    toggleListening: toggleVoiceCommand,
+  } = useVoiceCommand({
+    onIntent: executeCommand,
+    onError: (message) => {
+      notify({
+        title: 'Commande vocale',
+        description: message,
+        tone: 'error',
+      })
+    },
+  })
+
+  const handleVoiceCommandToggle = useCallback(async () => {
+    if (!voiceCommandSupported) {
+      notify({
+        title: 'Commande vocale indisponible',
+        description: "L'enregistrement audio n'est pas disponible sur cet appareil.",
+        tone: 'error',
+      })
+      return
+    }
+
+    await toggleVoiceCommand()
+  }, [notify, toggleVoiceCommand, voiceCommandSupported])
 
   // Load all data into cache on mount (and when cabinetId changes)
   useEffect(() => {
@@ -246,6 +404,10 @@ function DashboardLayout() {
               setSearch={setSearch}
               searchResults={searchResults}
               searchLoading={searchLoading}
+              voiceCommandRecording={voiceCommandRecording}
+              voiceCommandProcessing={voiceCommandProcessing}
+              voiceCommandSupported={voiceCommandSupported}
+              onToggleVoiceCommand={handleVoiceCommandToggle}
             />
 
             <main className={`flex-1 overflow-x-hidden relative ${isFullBleed ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
@@ -257,6 +419,13 @@ function DashboardLayout() {
           </SidebarInset>
 
           <FloatingActionButton />
+          <FloatingAiHub
+            isProcessing={voiceCommandProcessing}
+            voiceCommandSupported={voiceCommandSupported}
+            voiceCommandRecording={voiceCommandRecording}
+            voiceCommandProcessing={voiceCommandProcessing}
+            onToggleVoiceCommand={handleVoiceCommandToggle}
+          />
 
           <PatientFormModal open={globalModal?.type === 'patient'} onClose={closeGlobalModal} />
           <AppointmentFormModal open={globalModal?.type === 'appointment'} onClose={closeGlobalModal} />

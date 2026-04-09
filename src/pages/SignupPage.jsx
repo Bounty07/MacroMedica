@@ -1,7 +1,7 @@
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { SPECIALITES } from '../data/specialites'
+import { SPECIALITE_OPTIONS, getSpecialiteConfig } from '../data/specialites'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 
@@ -113,6 +113,7 @@ function SignupPage() {
             nomCabinet: form.nomCabinet.trim(),
             ville: form.ville?.trim() || null,
             telephone: form.telephone?.trim() || null,
+            specialite: form.specialite,
           }))
           toast.success('Vérifiez vos emails et confirmez votre compte pour continuer.')
           navigate('/verification')
@@ -129,7 +130,8 @@ function SignupPage() {
           tenant_id: activeUserId,
           nom: form.nomCabinet.trim(),
           ville: form.ville?.trim() || null,
-          telephone: form.telephone?.trim() || null
+          telephone: form.telephone?.trim() || null,
+          specialite: form.specialite,
         }])
         .select()
         .single()
@@ -164,6 +166,7 @@ function SignupPage() {
         telephone: form.telephone,
         nomCabinet: form.nomCabinet,
         specialite: form.specialite,
+        specialiteLabel: getSpecialiteConfig(form.specialite).label,
         cabinetId: cabinet.id
       }))
 
@@ -233,10 +236,10 @@ function SignupPage() {
             <span className="mb-2 block text-sm font-medium text-slate-700">Spécialité <span className="text-red-500">*</span></span>
             <select name="specialite" value={form.specialite} onChange={handleChange} required className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all appearance-none cursor-pointer">
               <option value="" disabled>Sélectionnez votre spécialité</option>
-              {SPECIALITES.filter(s => s !== 'Autre').map(spec => (
-                <option key={spec} value={spec}>{spec}</option>
+              {SPECIALITE_OPTIONS.filter((spec) => spec.key !== 'autre').map((spec) => (
+                <option key={spec.key} value={spec.key}>{spec.label}</option>
               ))}
-              <option value="Autre">Autre spécialité</option>
+              <option value="autre">Autre spécialité</option>
             </select>
           </label>
 

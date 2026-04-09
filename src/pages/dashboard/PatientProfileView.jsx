@@ -1,16 +1,34 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, BadgeInfo, CalendarDays, Edit3, FileText, FlaskConical, FolderOpen, HeartPulse, IdCard, MapPin, Phone, Plus, Ruler, Scale, ShieldCheck, Sparkles, Thermometer, UserRound, Waves, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BadgeInfo, CalendarDays, Edit3, FileText, FlaskConical, FolderOpen, HeartPulse, IdCard, MapPin, Phone, Plus, Ruler, Save, Scale, ShieldCheck, Sparkles, Stethoscope, Thermometer, UserRound, Waves, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '../../components/common/Modal'
+import PatientAiLabAnalysisModal from '../../components/patient/PatientAiLabAnalysisModal'
+import PatientAiScribeModal from '../../components/patient/PatientAiScribeModal'
 import { useAppContext } from '../../context/AppContext'
 import { createSigneVital, getConsultationsByPatient, getDocuments, getOrdonnancesByPatient, getPatientById, getRdv, getSignesVitauxByPatient, updateConsultation, updatePatient, updateSigneVital } from '../../lib/api'
+import { normalizeDoctorNotes, savePatientConsultation } from '../../lib/consultationNotes'
 import { supabase } from '../../lib/supabase'
+
+const OVERVIEW_TAB = "Vue d'ensemble"
+const CLINICAL_ANALYSIS_TAB = 'Analyse Clinique'
 
 function formatDate(value, withTime = false) {
   if (!value) return '-'
   return new Date(value).toLocaleDateString('fr-FR', withTime
     ? { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Casablanca' }
     : { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Casablanca' })
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  return new Date(value).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Africa/Casablanca',
+  })
 }
 
 function calcAge(dateStr) {
@@ -263,6 +281,37 @@ function supervisionContext({ patient, latestVitals, consultations, prescription
   ].join('\n')
 }
 
+function getDoctorNotesStorageKey(patientId) {
+  return `macromedica-doctor-notes-${patientId}`
+}
+
+function readLocalDoctorNotes(patientId) {
+  if (!patientId) return ''
+  try {
+    return localStorage.getItem(getDoctorNotesStorageKey(patientId)) || ''
+  } catch {
+    return ''
+  }
+}
+
+function writeLocalDoctorNotes(patientId, value) {
+  if (!patientId) return
+  try {
+    localStorage.setItem(getDoctorNotesStorageKey(patientId), value)
+  } catch {
+    // ignore local storage failures
+  }
+}
+
+function clearLocalDoctorNotes(patientId) {
+  if (!patientId) return
+  try {
+    localStorage.removeItem(getDoctorNotesStorageKey(patientId))
+  } catch {
+    // ignore local storage failures
+  }
+}
+
 function EditButton({ onClick, label = 'Modifier' }) {
   return (
     <button type="button" onClick={onClick} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">
@@ -356,8 +405,8 @@ function SimpleModal({ open, onClose, title, children, width = 'max-w-3xl' }) {
 }
 
 export default function PatientProfileView({ patientId, onBack }) {
-  const { profile, cabinetId, setInboxAlertCount } = useAppContext()
-  const [activeTab, setActiveTab] = useState('Synthese IA')
+  const { profile, cabinetId, notify, registerVoiceCommandHandler, setInboxAlertCount, specialiteConfig } = useAppContext()
+  const [activeTab, setActiveTab] = useState(OVERVIEW_TAB)
   const [refreshKey, setRefreshKey] = useState(0)
   const [patientModalOpen, setPatientModalOpen] = useState(false)
   const [patientFieldConfig, setPatientFieldConfig] = useState(null)
@@ -366,13 +415,29 @@ export default function PatientProfileView({ patientId, onBack }) {
   const [documentEditItem, setDocumentEditItem] = useState(null)
   const [criticalBanners, setCriticalBanners] = useState([])
   const [supervisionState, setSupervisionState] = useState({ loading: false, unavailable: false, summary: '', alerts: [] })
+  const [doctorNotes, setDoctorNotes] = useState('')
+  const [doctorNotesState, setDoctorNotesState] = useState({ saving: false, savedAt: '', savedSource: '', error: '', lastSavedSignature: '' })
+  const [scribeModalOpen, setScribeModalOpen] = useState(false)
+  const [labModalOpen, setLabModalOpen] = useState(false)
 
   const { data: patient, isLoading: loadingPatient } = useQuery({ queryKey: ['patient', patientId, refreshKey], queryFn: () => getPatientById(patientId), enabled: !!patientId })
   const { data: consultations = [] } = useQuery({ queryKey: ['consultations', patientId, refreshKey], queryFn: () => getConsultationsByPatient(patientId), enabled: !!patientId })
-  const { data: allRdvs = [] } = useQuery({ queryKey: ['rdv', profile?.cabinet_id, refreshKey], queryFn: getRdv, enabled: !!profile?.cabinet_id })
+  const { data: allRdvs = [] } = useQuery({ queryKey: ['rdv', cabinetId, refreshKey], queryFn: getRdv, enabled: !!cabinetId })
   const { data: vitalsHistory = [] } = useQuery({ queryKey: ['signes-vitaux', patientId, refreshKey], queryFn: () => getSignesVitauxByPatient(patientId), enabled: !!patientId })
   const { data: documents = [] } = useQuery({ queryKey: ['documents', patientId, refreshKey], queryFn: () => getDocuments(patientId), enabled: !!patientId })
   const { data: ordonnances = [] } = useQuery({ queryKey: ['ordonnances', patientId, refreshKey], queryFn: () => getOrdonnancesByPatient(patientId), enabled: !!patientId })
+
+  const tabs = useMemo(() => {
+    const nextTabs = [OVERVIEW_TAB]
+    if (specialiteConfig.features.analyseClinique) nextTabs.push(CLINICAL_ANALYSIS_TAB)
+    return [...nextTabs, 'Infos personnelles', 'Historique consultations', 'Ordonnances', 'Documents / scans', 'Notes medicales']
+  }, [specialiteConfig.features.analyseClinique])
+
+  useEffect(() => {
+    if (!tabs.includes(activeTab)) {
+      setActiveTab(tabs[0])
+    }
+  }, [tabs, activeTab])
 
   const demoVitals = useMemo(() => buildDemoVitals(patient), [patient])
   const displayConsultations = consultations.length > 0 ? consultations : buildDemoConsultations(patient)
@@ -386,6 +451,21 @@ export default function PatientProfileView({ patientId, onBack }) {
   const imcValue = latestVitals?.imc ?? calcImc(latestVitals?.poids, latestVitals?.taille)
   const imcMeta = getImcMeta(imcValue)
 
+  useEffect(() => {
+    setDoctorNotesState({ saving: false, savedAt: '', savedSource: '', error: '', lastSavedSignature: '' })
+  }, [patientId])
+
+  useEffect(() => {
+    const remoteNotes = patient?.notes_medecin || patient?.notes || ''
+    const localNotes = readLocalDoctorNotes(patientId)
+    setDoctorNotes(remoteNotes || localNotes)
+    setDoctorNotesState((current) => ({
+      ...current,
+      error: '',
+      savedSource: current.savedAt ? current.savedSource : remoteNotes ? 'database' : localNotes ? 'local' : '',
+    }))
+  }, [patientId, patient?.notes_medecin, patient?.notes])
+
   const localAlerts = useMemo(() => {
     const alerts = []
     if (Number(imcValue) >= 30) alerts.push({ level: 'warning', message: `IMC eleve (${imcValue}) : un suivi metabolique est recommande.` })
@@ -397,6 +477,10 @@ export default function PatientProfileView({ patientId, onBack }) {
   const contextText = useMemo(() => patient ? supervisionContext({ patient, latestVitals, consultations: recentConsultations, prescriptions: activePrescriptions, laboDocs: recentLaboDocs }) : '', [patient, latestVitals, recentConsultations, activePrescriptions, recentLaboDocs])
 
   useEffect(() => {
+    if (!specialiteConfig.features.analyseClinique) {
+      setSupervisionState({ loading: false, unavailable: false, summary: '', alerts: [] })
+      return
+    }
     if (!patient || !contextText) return
     let cancelled = false
     setSupervisionState((current) => ({ ...current, loading: true, unavailable: false }))
@@ -411,11 +495,12 @@ export default function PatientProfileView({ patientId, onBack }) {
       if (!cancelled) setSupervisionState({ loading: false, unavailable: true, summary: '', alerts: [] })
     })
     return () => { cancelled = true }
-  }, [patient, contextText])
+  }, [patient, contextText, specialiteConfig.features.analyseClinique])
 
   const mergedAlerts = useMemo(() => [...localAlerts, ...(supervisionState.alerts || [])], [localAlerts, supervisionState.alerts])
-  const nonCriticalAlerts = mergedAlerts.filter((item) => item.level !== 'critical')
-  const criticalAlerts = mergedAlerts.filter((item) => item.level === 'critical')
+  const nonCriticalAlerts = useMemo(() => mergedAlerts.filter((item) => item.level !== 'critical'), [mergedAlerts])
+  const criticalAlerts = useMemo(() => mergedAlerts.filter((item) => item.level === 'critical'), [mergedAlerts])
+  const criticalAlertSignature = useMemo(() => criticalAlerts.map((item) => `${item.level}:${item.message}`).join('|'), [criticalAlerts])
 
   useEffect(() => {
     setInboxAlertCount(nonCriticalAlerts.length)
@@ -423,49 +508,180 @@ export default function PatientProfileView({ patientId, onBack }) {
   }, [nonCriticalAlerts.length, setInboxAlertCount])
 
   useEffect(() => {
-    if (!criticalAlerts.length) return
-    const items = criticalAlerts.map((item, index) => ({ id: `critical_${Date.now()}_${index}`, message: item.message }))
+    if (!criticalAlerts.length) {
+      setCriticalBanners([])
+      return
+    }
+    const items = criticalAlerts.map((item, index) => ({ id: `critical_${index}_${item.message}`, message: item.message }))
     setCriticalBanners(items)
     const timers = items.map((item) => window.setTimeout(() => setCriticalBanners((current) => current.filter((entry) => entry.id !== item.id)), 10000))
     return () => timers.forEach((timer) => window.clearTimeout(timer))
-  }, [criticalAlerts])
+  }, [criticalAlertSignature])
+
+  const appendDoctorNotes = (text) => {
+    setDoctorNotes((current) => {
+      const base = current.trim()
+      const next = text.trim()
+      if (!base) return next
+      if (!next) return base
+      return `${base}\n\n${next}`
+    })
+    setActiveTab(OVERVIEW_TAB)
+  }
+
+  const handleSaveDoctorNotes = async () => {
+    if (!patient?.id) return
+    const normalizedNotes = normalizeDoctorNotes(doctorNotes)
+
+    if (!normalizedNotes) {
+      const message = 'Ajoutez une note clinique avant de sauvegarder la consultation.'
+      setDoctorNotesState((current) => ({
+        ...current,
+        error: message,
+      }))
+      notify({ title: 'Consultation incomplète', description: message, tone: 'error' })
+      return
+    }
+
+    if (doctorNotesState.lastSavedSignature === normalizedNotes) {
+      notify({
+        title: 'Note déjà enregistrée',
+        description: "Modifiez la note avant de créer une nouvelle consultation.",
+      })
+      return
+    }
+
+    setDoctorNotesState((current) => ({ ...current, saving: true, error: '' }))
+
+    try {
+      await savePatientConsultation({
+        supabaseClient: supabase,
+        cabinetId: cabinetId || patient?.cabinet_id,
+        patientId: patient.id,
+        notes: normalizedNotes,
+      })
+
+      let savedSource = 'database'
+      let syncDescription = ''
+
+      try {
+        await updatePatient(patient.id, { notes_medecin: normalizedNotes })
+        clearLocalDoctorNotes(patient.id)
+      } catch (syncError) {
+        const syncMessage = syncError?.message || ''
+        if (/notes_medecin|schema cache|column/i.test(syncMessage)) {
+          writeLocalDoctorNotes(patient.id, normalizedNotes)
+          savedSource = 'local'
+          syncDescription = ' Une copie locale de la note reste disponible sur ce poste.'
+        } else {
+          savedSource = 'consultation_only'
+          syncDescription = " La consultation est bien enregistrée, mais la note libre n'a pas pu être synchronisée au dossier."
+          console.warn('Patient note sync failed after consultation insert:', syncError)
+        }
+      }
+
+      setDoctorNotesState({
+        saving: false,
+        savedAt: new Date().toISOString(),
+        savedSource,
+        error: '',
+        lastSavedSignature: normalizedNotes,
+      })
+      setRefreshKey((current) => current + 1)
+      notify({
+        title: 'Consultation sauvegardée',
+        description: `La consultation a été ajoutée à l'historique du patient.${syncDescription}`,
+      })
+    } catch (error) {
+      const message = error?.message || "Impossible d'enregistrer la consultation."
+
+      setDoctorNotesState({
+        saving: false,
+        savedAt: '',
+        savedSource: '',
+        error: message,
+        lastSavedSignature: doctorNotesState.lastSavedSignature,
+      })
+      notify({ title: 'Échec de sauvegarde', description: message, tone: 'error' })
+    }
+  }
+
+  useEffect(() => {
+    return registerVoiceCommandHandler('save-record', async () => {
+      await handleSaveDoctorNotes()
+      return true
+    })
+  }, [doctorNotes, doctorNotesState.lastSavedSignature, patient?.id, registerVoiceCommandHandler])
+
+  useEffect(() => {
+    return registerVoiceCommandHandler('add_note', async (payload) => {
+      const nextText = typeof payload === 'string' ? payload.trim() : ''
+      if (!nextText) return false
+
+      appendDoctorNotes(nextText)
+      return true
+    })
+  }, [appendDoctorNotes, registerVoiceCommandHandler])
 
   if (loadingPatient || !patient) {
     return <div className="flex min-h-[500px] items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" /></div>
   }
 
   return (
-    <PatientProfileContent
-      patient={patient}
-      profile={profile}
-      cabinetId={cabinetId}
-      activeTab={activeTab}
-      setActiveTab={setActiveTab}
-      onBack={onBack}
-      nextRdv={nextRdv}
-      latestVitals={latestVitals}
-      imcValue={imcValue}
-      imcMeta={imcMeta}
-      consultations={displayConsultations}
-      ordonnances={displayOrdonnances}
-      documents={displayDocuments}
-      recentLaboDocs={recentLaboDocs}
-      nonCriticalAlerts={nonCriticalAlerts}
-      criticalBanners={criticalBanners}
-      setCriticalBanners={setCriticalBanners}
-      supervisionState={supervisionState}
-      refreshPage={() => setRefreshKey((current) => current + 1)}
-      patientModalOpen={patientModalOpen}
-      setPatientModalOpen={setPatientModalOpen}
-      patientFieldConfig={patientFieldConfig}
-      setPatientFieldConfig={setPatientFieldConfig}
-      vitalsModalOpen={vitalsModalOpen}
-      setVitalsModalOpen={setVitalsModalOpen}
-      consultationEditItem={consultationEditItem}
-      setConsultationEditItem={setConsultationEditItem}
-      documentEditItem={documentEditItem}
-      setDocumentEditItem={setDocumentEditItem}
-    />
+    <>
+      <PatientProfileContent
+        patient={patient}
+        profile={profile}
+        cabinetId={cabinetId}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onBack={onBack}
+        nextRdv={nextRdv}
+        latestVitals={latestVitals}
+        imcValue={imcValue}
+        imcMeta={imcMeta}
+        consultations={displayConsultations}
+        ordonnances={displayOrdonnances}
+        documents={displayDocuments}
+        recentLaboDocs={recentLaboDocs}
+        nonCriticalAlerts={nonCriticalAlerts}
+        criticalBanners={criticalBanners}
+        setCriticalBanners={setCriticalBanners}
+        supervisionState={supervisionState}
+        specialiteConfig={specialiteConfig}
+        tabs={tabs}
+        doctorNotes={doctorNotes}
+        setDoctorNotes={setDoctorNotes}
+        doctorNotesState={doctorNotesState}
+        onSaveDoctorNotes={handleSaveDoctorNotes}
+        onOpenScribeModal={() => setScribeModalOpen(true)}
+        onOpenLabModal={() => setLabModalOpen(true)}
+        refreshPage={() => setRefreshKey((current) => current + 1)}
+        patientModalOpen={patientModalOpen}
+        setPatientModalOpen={setPatientModalOpen}
+        patientFieldConfig={patientFieldConfig}
+        setPatientFieldConfig={setPatientFieldConfig}
+        vitalsModalOpen={vitalsModalOpen}
+        setVitalsModalOpen={setVitalsModalOpen}
+        consultationEditItem={consultationEditItem}
+        setConsultationEditItem={setConsultationEditItem}
+        documentEditItem={documentEditItem}
+        setDocumentEditItem={setDocumentEditItem}
+      />
+      <PatientAiScribeModal
+        open={scribeModalOpen}
+        onClose={() => setScribeModalOpen(false)}
+        patient={patient}
+        onInsertNotes={appendDoctorNotes}
+      />
+      <PatientAiLabAnalysisModal
+        open={labModalOpen}
+        onClose={() => setLabModalOpen(false)}
+        patient={patient}
+        documents={displayDocuments}
+        onInsertSummary={appendDoctorNotes}
+      />
+    </>
   )
 }
 
@@ -473,7 +689,8 @@ function PatientProfileContent(props) {
   const {
     patient, profile, cabinetId, activeTab, setActiveTab, onBack, nextRdv, latestVitals, imcValue, imcMeta,
     consultations, ordonnances, documents, recentLaboDocs, nonCriticalAlerts, criticalBanners, setCriticalBanners,
-    supervisionState, refreshPage, patientModalOpen, setPatientModalOpen, vitalsModalOpen, setVitalsModalOpen,
+    supervisionState, specialiteConfig, tabs, doctorNotes, setDoctorNotes, doctorNotesState, onSaveDoctorNotes, onOpenScribeModal, onOpenLabModal,
+    refreshPage, patientModalOpen, setPatientModalOpen, vitalsModalOpen, setVitalsModalOpen,
     patientFieldConfig, setPatientFieldConfig, consultationEditItem, setConsultationEditItem, documentEditItem, setDocumentEditItem,
   } = props
   const [expandedConsultationId, setExpandedConsultationId] = useState(null)
@@ -515,9 +732,8 @@ function PatientProfileContent(props) {
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-[24px] font-black tracking-tight text-slate-950">{patient.prenom} {patient.nom}</h1>
-                <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[12px] font-bold uppercase tracking-[0.14em] text-sky-700">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Synthese IA
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                  {specialiteConfig.label}
                 </span>
               </div>
               <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Un seul endroit pour les infos, consultations, ordonnances, scans et notes medicales</p>
@@ -540,7 +756,7 @@ function PatientProfileContent(props) {
 
       <div className="border-b border-slate-200 bg-white px-8">
         <div className="flex gap-8 overflow-x-auto">
-          {['Synthese IA', 'Infos personnelles', 'Historique consultations', 'Ordonnances', 'Documents / scans', 'Notes medicales'].map((tab) => (
+          {tabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`whitespace-nowrap border-b-2 py-5 text-[15px] font-bold transition ${activeTab === tab ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-400 hover:text-slate-700'}`}>
               {tab}
             </button>
@@ -549,7 +765,7 @@ function PatientProfileContent(props) {
       </div>
 
       <div className="px-8 py-8">
-        {activeTab === 'Synthese IA' ? (
+        {activeTab === OVERVIEW_TAB ? (
           <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
             <div className="space-y-8">
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -558,32 +774,65 @@ function PatientProfileContent(props) {
                 <QuickJumpCard title="Ordonnances" value={ordonnances.length} subtitle="Traitements et renouvellements" onClick={() => setActiveTab('Ordonnances')} />
                 <QuickJumpCard title="Documents" value={documents.length} subtitle="Scans, bilans et PDF" onClick={() => setActiveTab('Documents / scans')} />
               </section>
-              <section>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-sky-600" />
-                    <h2 className="text-[14px] font-black uppercase tracking-[0.18em] text-slate-900">Analyse clinique</h2>
+              <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Stethoscope className="h-4 w-4 text-emerald-600" />
+                      <h2 className="text-lg font-bold text-slate-900">Notes du Medecin</h2>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Renseignez ici la note clinique de la consultation en cours. Le bouton de sauvegarde cree une consultation liee au patient et alimente son historique.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {specialiteConfig.features.aiScribe ? (
+                      <button
+                        type="button"
+                        onClick={onOpenScribeModal}
+                        className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-100"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        IA Scribe / Dictee
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={onSaveDoctorNotes}
+                      disabled={doctorNotesState.saving}
+                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      {doctorNotesState.saving ? 'Enregistrement...' : 'Sauvegarder'}
+                    </button>
                   </div>
                 </div>
-                <div className="rounded-[22px] border border-sky-100 bg-sky-50 p-6 text-[17px] leading-8 text-slate-700">
-                  {supervisionState.loading ? 'Chargement de la supervision IA...' : aiSummary}
+
+                <textarea
+                  value={doctorNotes}
+                  onChange={(event) => setDoctorNotes(event.target.value)}
+                  rows={10}
+                  placeholder="Tapez ici les notes libres du medecin..."
+                  className="w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700 outline-none focus:border-emerald-300"
+                />
+
+                <div className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  {doctorNotesState.error ? (
+                    <span className="font-semibold text-rose-700">{doctorNotesState.error}</span>
+                  ) : doctorNotesState.savedSource === 'consultation_only' ? (
+                    <span>
+                      Consultation sauvegardee le {formatDateTime(doctorNotesState.savedAt)}. La note libre n'a pas pu etre synchronisee dans le dossier patient.
+                    </span>
+                  ) : doctorNotesState.savedSource === 'local' ? (
+                    <span>
+                      Consultation sauvegardee le {formatDateTime(doctorNotesState.savedAt)} et ajoutee a l'historique. Une copie locale de la note est conservee sur cet appareil.
+                    </span>
+                  ) : doctorNotesState.savedAt ? (
+                    <span>Consultation sauvegardee et visible dans l'historique depuis le {formatDateTime(doctorNotesState.savedAt)}.</span>
+                  ) : (
+                    <span>Ces notes servent de brouillon clinique et seront ajoutees a l'historique des consultations du patient.</span>
+                  )}
                 </div>
-                {supervisionState.unavailable ? (
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <div className="rounded-[18px] border border-white/80 bg-white/80 p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Point fort</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-800">Suivi recent documente avec consultations et traitements traces.</p>
-                    </div>
-                    <div className="rounded-[18px] border border-white/80 bg-white/80 p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Surveillance</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-800">Verifier observance, evolution symptomatique et dernier bilan labo.</p>
-                    </div>
-                    <div className="rounded-[18px] border border-white/80 bg-white/80 p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Action suggeree</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-800">Planifier un point de controle si symptomes recurrents ou nouvelle alerte vitale.</p>
-                    </div>
-                  </div>
-                ) : null}
               </section>
 
               <section>
@@ -643,6 +892,78 @@ function PatientProfileContent(props) {
               <VitalCard icon={Sparkles} label="IMC" value={imcValue || '-'} helper={imcMeta.label} tone={imcMeta.tone} />
               <VitalCard icon={Waves} label="Saturation" value={latestVitals?.saturation ? `${latestVitals.saturation}%` : '-'} helper={latestVitals?.frequence_cardiaque ? `${latestVitals.frequence_cardiaque} bpm` : 'Frequence non renseignee'} />
               <VitalCard icon={Thermometer} label="Temperature" value={latestVitals?.temperature ? `${latestVitals.temperature}°` : '-'} helper={latestVitals?.tension_systolique ? `${latestVitals.tension_systolique}/${latestVitals.tension_diastolique} mmHg` : 'Tension enregistree dans la mesure'} />
+            </aside>
+          </div>
+        ) : null}
+
+        {activeTab === CLINICAL_ANALYSIS_TAB ? (
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-6">
+              <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-sky-600" />
+                  <h2 className="text-lg font-bold text-slate-900">Analyse clinique</h2>
+                </div>
+                <div className="rounded-[22px] border border-sky-100 bg-sky-50 p-6 text-[17px] leading-8 text-slate-700">
+                  {supervisionState.loading ? 'Chargement de la supervision IA...' : aiSummary}
+                </div>
+                {supervisionState.unavailable ? (
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-[18px] border border-white/80 bg-white/80 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Point fort</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">Suivi recent documente avec consultations et traitements traces.</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/80 bg-white/80 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Surveillance</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">Verifier observance, evolution symptomatique et dernier bilan labo.</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/80 bg-white/80 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Action suggeree</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800">Planifier un point de controle si symptomes recurrents ou nouvelle alerte vitale.</p>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <BadgeInfo className="h-4 w-4 text-amber-600" />
+                  <h2 className="text-[14px] font-black uppercase tracking-[0.18em] text-slate-900">Alertes et supervision</h2>
+                </div>
+                <div className="space-y-3">
+                  {nonCriticalAlerts.length > 0 ? nonCriticalAlerts.map((alert, index) => (
+                    <div key={`${alert.level}_${index}`} className={`rounded-[18px] border px-4 py-4 text-sm ${alert.level === 'warning' ? 'border-amber-100 bg-amber-50 text-amber-800' : 'border-sky-100 bg-sky-50 text-sky-800'}`}>
+                      <p className="font-semibold">{alert.message}</p>
+                    </div>
+                  )) : <div className="rounded-[18px] border border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">Aucune alerte non urgente a afficher.</div>}
+                </div>
+              </section>
+            </div>
+
+            <aside className="space-y-5">
+              <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-[14px] font-black uppercase tracking-[0.18em] text-slate-900">Documents de reference</h2>
+                <div className="mt-4 space-y-3">
+                  {recentLaboDocs.length > 0 ? recentLaboDocs.map((item) => (
+                    <div key={item.id} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-bold text-slate-900">{item.nom_fichier || item.type_document}</p>
+                      <p className="mt-1 text-xs font-medium text-slate-500">{formatDate(item.created_at)}</p>
+                    </div>
+                  )) : <div className="rounded-[18px] border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-500">Aucun document recent a analyser.</div>}
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-[14px] font-black uppercase tracking-[0.18em] text-slate-900">Traitements actifs</h2>
+                <div className="mt-4 space-y-3">
+                  {ordonnances.length > 0 ? ordonnances.slice(0, 5).map((doc) => (
+                    <div key={doc.id} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-bold text-slate-900">{doc.nom_fichier || 'Ordonnance'}</p>
+                      <p className="mt-2 text-sm text-slate-600">{(parsePrescriptionNotes(doc.consultations?.notes)?.medicaments || []).map((med) => med.nom).filter(Boolean).join(', ') || 'Sans details structures.'}</p>
+                    </div>
+                  )) : <div className="rounded-[18px] border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-500">Aucune ordonnance active.</div>}
+                </div>
+              </div>
             </aside>
           </div>
         ) : null}
@@ -742,9 +1063,21 @@ function PatientProfileContent(props) {
 
         {activeTab === 'Documents / scans' ? (
           <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-2">
-              <FolderOpen className="h-4 w-4 text-emerald-600" />
-              <h2 className="text-lg font-bold text-slate-900">Documents / scans</h2>
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-emerald-600" />
+                <h2 className="text-lg font-bold text-slate-900">Documents / scans</h2>
+              </div>
+              {specialiteConfig.features.aiLabAnalysis ? (
+                <button
+                  type="button"
+                  onClick={onOpenLabModal}
+                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Analyse de Bilan (IA)
+                </button>
+              ) : null}
             </div>
             <div className="mb-5 grid gap-4 md:grid-cols-3">
               <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">

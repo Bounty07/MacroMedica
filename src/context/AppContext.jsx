@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { RDV_STATUSES } from '../lib/workflow'
+import { getSpecialiteConfig, normalizeSpecialiteKey } from '../data/specialites'
 
 const AppContext = createContext(null)
 const PREFS_KEY = 'macromedica-notification-prefs'
@@ -41,6 +42,7 @@ export function AppProvider({ children }) {
 
   const currentUserIdRef = useRef(null)
   const initDoneRef = useRef(false)
+  const voiceCommandHandlersRef = useRef(new Map())
 
   // Fetch profile by user ID
   const fetchProfile = useCallback(async (userId) => {
@@ -191,6 +193,24 @@ export function AppProvider({ children }) {
     }, 3200)
   }
 
+  const registerVoiceCommandHandler = useCallback((commandId, handler) => {
+    voiceCommandHandlersRef.current.set(commandId, handler)
+
+    return () => {
+      if (voiceCommandHandlersRef.current.get(commandId) === handler) {
+        voiceCommandHandlersRef.current.delete(commandId)
+      }
+    }
+  }, [])
+
+  const runVoiceCommandHandler = useCallback(async (commandId, payload) => {
+    const handler = voiceCommandHandlersRef.current.get(commandId)
+    if (!handler) return false
+
+    const result = await handler(payload)
+    return result !== false
+  }, [])
+
   // Login: sign in, then immediately fetch profile so navigation can happen
   const login = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -257,6 +277,10 @@ export function AppProvider({ children }) {
   const isSecretary = role === 'secretaire'
   const isAdmin = role === 'admin' || role === 'docteur'
   const workspaceRole = isSecretary ? 'secretaire' : 'admin'
+  const cabinet = profile?.cabinets || profile?.clinics || null
+  const cabinetSpecialite = cabinet?.specialite || null
+  const specialiteKey = normalizeSpecialiteKey(cabinetSpecialite)
+  const specialiteConfig = getSpecialiteConfig(cabinetSpecialite)
 
   const value = useMemo(() => ({
     user,
@@ -265,8 +289,11 @@ export function AppProvider({ children }) {
     isSecretary,
     isAdmin,
     workspaceRole,
-    cabinet: profile?.clinics,
+    cabinet,
     cabinetId: profile?.cabinet_id,
+    cabinetSpecialite,
+    specialiteKey,
+    specialiteConfig,
     currentUser: profile
       ? { name: profile.nom_complet, role: profile.role }
       : { name: 'Utilisateur', role: 'Staff' },
@@ -289,6 +316,8 @@ export function AppProvider({ children }) {
     dismissToast(id) { setToasts((c) => c.filter((t) => t.id !== id)) },
     notify(toast) { pushToast(toast) },
     setInboxAlertCount,
+    registerVoiceCommandHandler,
+    runVoiceCommandHandler,
 
     // Fallbacks for un-migrated components
     patients,
@@ -310,7 +339,7 @@ export function AppProvider({ children }) {
         loadConsultations(profile.cabinet_id)
       }
     },
-  }), [user, profile, role, isSecretary, isAdmin, workspaceRole, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, inboxAlertCount, patients, rdvList, consultations, waitingList])
+  }), [user, profile, role, isSecretary, isAdmin, workspaceRole, cabinet, cabinetSpecialite, specialiteKey, specialiteConfig, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, inboxAlertCount, patients, rdvList, consultations, waitingList, registerVoiceCommandHandler, runVoiceCommandHandler])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

@@ -1,9 +1,19 @@
-import { Bell, Search, User, Settings, LogOut, Menu, Loader2, Calendar, Stethoscope } from 'lucide-react'
+import { Bell, Mic, Search, User, Settings, LogOut, Menu, Loader2, Calendar, Stethoscope } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppContext } from '../context/AppContext'
 
-function DashboardHeader({ onMenuClick, search, setSearch, searchResults, searchLoading }) {
+function DashboardHeader({
+  onMenuClick,
+  search,
+  setSearch,
+  searchResults,
+  searchLoading,
+  voiceCommandRecording,
+  voiceCommandProcessing,
+  voiceCommandSupported,
+  onToggleVoiceCommand,
+}) {
   const navigate = useNavigate()
   const { profile, currentUser, logout } = useAppContext()
 
@@ -167,6 +177,37 @@ function DashboardHeader({ onMenuClick, search, setSearch, searchResults, search
       </div>
 
       <div className="flex shrink-0 items-center justify-end gap-5">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={onToggleVoiceCommand}
+            disabled={voiceCommandProcessing}
+            className={`relative inline-flex h-11 w-11 items-center justify-center rounded-xl border bg-white shadow-sm transition ${
+              voiceCommandRecording
+                ? 'border-rose-300 text-rose-700'
+                : voiceCommandProcessing
+                  ? 'border-amber-300 text-amber-700'
+                : 'border-slate-200 text-slate-700 hover:border-teal-200 hover:text-teal-700'
+            } ${!voiceCommandSupported ? 'opacity-60' : ''}`}
+            title={
+              !voiceCommandSupported
+                ? 'Commande vocale indisponible sur cet appareil'
+                : voiceCommandProcessing
+                  ? 'Analyse vocale en cours'
+                  : voiceCommandRecording
+                    ? "Arreter et envoyer l'audio"
+                    : 'Demarrer une commande vocale'
+            }
+          >
+            {voiceCommandProcessing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mic className="h-5 w-5" />}
+            {voiceCommandRecording || voiceCommandProcessing ? (
+              <span className={`absolute right-2 top-2 h-2.5 w-2.5 rounded-full ${
+                voiceCommandRecording ? 'bg-rose-500 animate-pulse' : 'bg-amber-400 animate-pulse'
+              }`} />
+            ) : null}
+          </button>
+        </div>
+
         <div className="relative">
           <button type="button" onClick={() => setShowNotifications(!showNotifications)} className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-teal-200 hover:text-teal-700">
             <Bell className="h-6 w-6" />

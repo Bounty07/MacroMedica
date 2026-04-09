@@ -5,6 +5,7 @@ import { AppButton, ContentCard, StatusBadge } from '../../components/dashboard/
 import AppointmentFormModal from '../../components/forms/AppointmentFormModal'
 import Modal from '../../components/common/Modal'
 import { getRdv, updateRdv, deleteRdv } from '../../lib/api'
+import { analyzeScheduleOptimization, formatScheduleTime } from '../../lib/scheduleOptimization'
 import { useAppContext } from '../../context/AppContext'
 import { supabase } from '../../lib/supabase'
 import { isValidTransition, RDV_STATUSES } from '../../lib/workflow'
@@ -136,6 +137,7 @@ function AppointmentsPage() {
   const [showCreate, setShowCreate]   = useState(false)
   const [editingRdv, setEditingRdv]   = useState(null)
   const [selectedRdv, setSelectedRdv] = useState(null)
+  const [scheduleOptimization, setScheduleOptimization] = useState(null)
 
   /* ── Data ── */
   const { data: rdvs = [], isLoading, refetch } = useQuery({
@@ -154,6 +156,10 @@ function AppointmentsPage() {
     return () => { supabase.removeChannel(ch) }
   }, [profile?.cabinet_id, refetch])
 
+  useEffect(() => {
+    setScheduleOptimization(null)
+  }, [focusDate, rdvs])
+
   /* ── Group by date (Morocco TZ) ── */
   const rdvByDate = useMemo(() => {
     const map = {}
@@ -166,6 +172,8 @@ function AppointmentsPage() {
   }, [rdvs])
 
   const todayKey = makeDayKey(now.getFullYear(), now.getMonth(), now.getDate())
+  const optimizationDayKey = makeDayKey(focusDate.getFullYear(), focusDate.getMonth(), focusDate.getDate())
+  const optimizationDayLabel = formatDateDisplay(focusDate, { weekday: 'long', day: 'numeric', month: 'long' })
 
   /* ── Current time indicator ── */
   const nowTime = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: TZ })
@@ -203,6 +211,25 @@ function AppointmentsPage() {
     catch (e) { console.error(e) }
   }
   const handleFormOk = () => refetch()
+
+  const handleOptimizeAgenda = () => {
+    const result = analyzeScheduleOptimization(rdvs, optimizationDayKey)
+
+    if (!result.possible) {
+      setScheduleOptimization(null)
+      notify({
+        title: "Optimisation de l'agenda",
+        description: 'Aucune optimisation possible pour le moment.',
+      })
+      return
+    }
+
+    setScheduleOptimization(result)
+    notify({
+      title: "Optimisation de l'agenda",
+      description: `Suggestion generee pour ${optimizationDayLabel}.`,
+    })
+  }
 
   /* ═══════════════════════════════════
      RENDER
@@ -449,9 +476,40 @@ function AppointmentsPage() {
                   <p className="text-[14px] text-teal-100 leading-relaxed font-medium">
                     L'IA suggère de regrouper les consultations pour libérer des créneaux en fin d'après-midi.
                   </p>
+                  <p className="mt-3 text-[12px] text-teal-100/90 leading-relaxed font-semibold">
+                    Journee cible: {optimizationDayLabel}.
+                  </p>
+                  {scheduleOptimization?.possible ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-xl bg-white/10 px-3 py-2 text-[12px] font-semibold text-teal-50">
+                        {scheduleOptimization.recoveredMinutes > 0
+                          ? `${scheduleOptimization.recoveredMinutes} minute${scheduleOptimization.recoveredMinutes > 1 ? 's' : ''} recuperable${scheduleOptimization.recoveredMinutes > 1 ? 's' : ''}.`
+                          : 'Chevauchement detecte: resequencage conseille.'}
+                      </div>
+                      <div className="space-y-2">
+                        {scheduleOptimization.suggestions.slice(0, 3).map((suggestion) => (
+                          <div key={suggestion.id} className="rounded-xl bg-white/10 px-3 py-3">
+                            <p className="text-sm font-bold text-white">{suggestion.patientLabel}</p>
+                            <p className="mt-1 text-xs text-teal-100">
+                              {formatScheduleTime(suggestion.originalIso)} {'->'} {formatScheduleTime(suggestion.suggestedIso)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      {scheduleOptimization.suggestions.length > 3 ? (
+                        <p className="text-xs font-semibold text-teal-100">
+                          +{scheduleOptimization.suggestions.length - 3} autre{scheduleOptimization.suggestions.length - 3 > 1 ? 's' : ''} ajustement{scheduleOptimization.suggestions.length - 3 > 1 ? 's' : ''} propose{scheduleOptimization.suggestions.length - 3 > 1 ? 's' : ''}.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-                <button className="mt-6 w-full py-3 rounded-xl bg-white text-teal-800 text-[13px] font-extrabold uppercase tracking-widest hover:bg-teal-50 hover:shadow-[0_4px_12px_rgba(255,255,255,0.2)] transition-all">
-                  APPLIQUER
+                <button
+                  type="button"
+                  onClick={handleOptimizeAgenda}
+                  className="mt-6 w-full py-3 rounded-xl bg-white text-teal-800 text-[13px] font-extrabold uppercase tracking-widest hover:bg-teal-50 hover:shadow-[0_4px_12px_rgba(255,255,255,0.2)] transition-all"
+                >
+                  {scheduleOptimization?.possible ? 'RECALCULER' : 'ANALYSER'}
                 </button>
               </div>
             </div>
