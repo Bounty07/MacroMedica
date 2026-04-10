@@ -199,6 +199,65 @@ export const getConsultationsByPatient = async (
   return data
 }
 
+export const getLatestConsultationByPatient = async (
+  patientId: string
+) => {
+  const { data, error } = await supabase
+    .from('consultations')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('date_consult', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export const getPatientDashboardData = async (
+  patientId: string
+) => {
+  const [
+    patientResult,
+    consultationsResult,
+    vitalsResult,
+    documentsResult,
+  ] = await Promise.all([
+    supabase
+      .from('patients')
+      .select('*')
+      .eq('id', patientId)
+      .single(),
+    supabase
+      .from('consultations')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('date_consult', { ascending: false }),
+    supabase
+      .from('signes_vitaux')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('measured_at', { ascending: false })
+      .limit(12),
+    supabase
+      .from('documents')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
+
+  if (patientResult.error) throw patientResult.error
+  if (consultationsResult.error) throw consultationsResult.error
+
+  return {
+    patient: patientResult.data,
+    consultations: consultationsResult.data || [],
+    vitalsHistory: vitalsResult.error ? [] : (vitalsResult.data || []),
+    documents: documentsResult.error ? [] : (documentsResult.data || []),
+  }
+}
+
 export const createConsultation = async (
   consultation: Omit<Consultation, 'id' | 'created_at'>
 ) => {

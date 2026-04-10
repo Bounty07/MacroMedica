@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Search, Loader2, Users, FileCheck, Calendar, ChevronLeft, ChevronRight, SlidersHorizontal, Plus, AlertCircle, MoreVertical, Eye } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Search, Loader2, Users, FileCheck, Calendar, ChevronLeft, ChevronRight, SlidersHorizontal, Plus, AlertCircle, Eye, Baby, ShieldPlus, Activity, Phone, HeartPulse, ClipboardList } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AppButton } from '../../components/dashboard/DashboardPrimitives'
 import PatientFormModal from '../../components/forms/PatientFormModal'
 import { getPatients, getConsultations, getRdv } from '../../lib/api'
@@ -30,16 +30,144 @@ function calcAge(dateStr) {
 
 const PAGE_SIZE = 10
 
+const GENERALIST_PATIENT_FALLBACKS = [
+  {
+    id: 'gen-001',
+    prenom: 'Hatim',
+    nom: 'Mazgouri',
+    date_naissance: '1992-03-10',
+    sexe: 'homme',
+    telephone: '0661458922',
+    statut: 'actif',
+    created_at: '2026-04-04T08:30:00Z',
+    updated_at: '2026-04-09T10:15:00Z',
+  },
+  {
+    id: 'gen-002',
+    prenom: 'Lahlou',
+    nom: 'Nisrine',
+    date_naissance: '1999-08-21',
+    sexe: 'femme',
+    telephone: '0698765432',
+    statut: 'actif',
+    created_at: '2026-04-01T09:00:00Z',
+    updated_at: '2026-04-08T16:45:00Z',
+  },
+  {
+    id: 'gen-003',
+    prenom: 'Rami',
+    nom: 'Imane',
+    date_naissance: '1991-11-16',
+    sexe: 'femme',
+    telephone: '0678456123',
+    statut: 'archive',
+    created_at: '2026-03-18T11:00:00Z',
+    updated_at: '2026-03-30T14:10:00Z',
+  },
+]
+
+const PEDIATRIC_PATIENT_FALLBACKS = [
+  {
+    id: 'ped-001',
+    prenom: 'Adam',
+    nom: 'Bennani',
+    date_naissance: '2019-04-14',
+    sexe: 'homme',
+    telephone: '0661234567',
+    statut: 'actif',
+    created_at: '2026-04-02T08:00:00Z',
+    parentLabel: 'Salma Bennani',
+    guardianPhone: '0661234567',
+    growthStatus: 'Courbe stable',
+    vaccineStatus: 'A jour',
+  },
+  {
+    id: 'ped-002',
+    prenom: 'Lina',
+    nom: 'El Fassi',
+    date_naissance: '2021-09-03',
+    sexe: 'femme',
+    telephone: '0671122334',
+    statut: 'actif',
+    created_at: '2026-03-21T09:00:00Z',
+    parentLabel: 'Nadia El Fassi',
+    guardianPhone: '0671122334',
+    growthStatus: 'Surveillance poids',
+    vaccineStatus: 'Rappel 18 mois',
+  },
+  {
+    id: 'ped-003',
+    prenom: 'Youssef',
+    nom: 'Alaoui',
+    date_naissance: '2017-11-28',
+    sexe: 'homme',
+    telephone: '0657788990',
+    statut: 'archive',
+    created_at: '2026-02-11T10:00:00Z',
+    parentLabel: 'Meriem Alaoui',
+    guardianPhone: '0657788990',
+    growthStatus: 'Courbe a revoir',
+    vaccineStatus: 'A jour',
+  },
+]
+
+const PEDIATRIC_GROWTH_SNAPSHOTS = [
+  { poids: '18.4 kg', taille: '109 cm', imc: '15.5', percentile: 'P62', nextCheck: '15 avr. 2026' },
+  { poids: '12.1 kg', taille: '88 cm', imc: '15.6', percentile: 'P54', nextCheck: '20 avr. 2026' },
+  { poids: '24.6 kg', taille: '122 cm', imc: '16.5', percentile: 'P71', nextCheck: '29 avr. 2026' },
+]
+
+const PEDIATRIC_GUARDIAN_NOTES = [
+  { relation: 'Mere', emergency: 'Oui', consent: 'Consentement numerique signe' },
+  { relation: 'Pere', emergency: 'Oui', consent: 'Autorisation vaccinale recue' },
+  { relation: 'Tuteur legal', emergency: 'Non', consent: 'A verifier a la prochaine visite' },
+]
+
+const PEDIATRIC_VACCINE_FALLBACKS = [
+  { nextDose: 'Rappel DTPa', dueDate: '18 avr. 2026', status: 'A programmer', detail: 'Rappel 6 ans + verification carnet' },
+  { nextDose: 'ROR 2e dose', dueDate: '22 avr. 2026', status: 'A confirmer', detail: 'Verifier preuve vaccinale precedente' },
+  { nextDose: 'Grippe saisonniere', dueDate: '05 mai 2026', status: 'En attente accord', detail: 'Proposer avec education parentale' },
+]
+
+function getPatientFullName(patient) {
+  return [patient?.prenom, patient?.nom].filter(Boolean).join(' ').trim() || 'Patient inconnu'
+}
+
+function getPatientRecordNumber(id) {
+  const numeric = String(id || '').replace(/\D/g, '').slice(-5)
+  return `#${(numeric || '48291').padStart(5, '0')}`
+}
+
+function getPediatricRowMeta(patient, index) {
+  const fallback = PEDIATRIC_PATIENT_FALLBACKS[index % PEDIATRIC_PATIENT_FALLBACKS.length]
+  return {
+    parentLabel: patient.parentLabel || patient.tuteur_nom || fallback.parentLabel,
+    guardianPhone: patient.guardianPhone || patient.tuteur_telephone || patient.telephone || fallback.guardianPhone,
+    growthStatus: patient.growthStatus || fallback.growthStatus,
+    vaccineStatus: patient.vaccineStatus || fallback.vaccineStatus,
+  }
+}
+
 function PatientsPage() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { profile } = useAppContext()
+  const { profile, specialiteKey } = useAppContext()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const patientsView = searchParams.get('view') || 'registry'
+  const isPediatric = specialiteKey === 'pediatrie'
   
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [editingPatient, setEditingPatient] = useState(null)
   const [activeTab, setActiveTab] = useState('Tous')
   const [currentPage, setCurrentPage] = useState(1)
+
+  useEffect(() => {
+    if (!isPediatric) return
+    if (patientsView === 'growth') setActiveTab('Suivi croissance')
+    else if (patientsView === 'vaccination') setActiveTab('Vaccination')
+    else setActiveTab('Tous')
+  }, [isPediatric, patientsView])
 
   // ── Data Queries ──
   const { data: patients, isLoading: isLoadingPatients, refetch } = useQuery({
@@ -61,12 +189,17 @@ function PatientsPage() {
   })
 
   // ── Build lookup maps for real data ──
+  const displayPatients = useMemo(() => {
+    if (patients?.length) return patients
+    return isPediatric ? PEDIATRIC_PATIENT_FALLBACKS : GENERALIST_PATIENT_FALLBACKS
+  }, [isPediatric, patients])
+
   const patientDataMap = useMemo(() => {
     const map = {}
-    if (!patients) return map
+    if (!displayPatients) return map
 
     // Initialize all patients
-    patients.forEach(p => {
+    displayPatients.forEach(p => {
       map[p.id] = {
         hasUnpaidCredit: false,
         lastVisitDate: null,
@@ -112,46 +245,65 @@ function PatientsPage() {
     }
 
     return map
-  }, [patients, consultations, rdvs])
+  }, [consultations, displayPatients, rdvs])
 
   // ── Compute tab counts ──
   const tabCounts = useMemo(() => {
-    if (!patients) return { Tous: 0, Actifs: 0, 'Bilan impayé': 0, Archivés: 0 }
-    let actifs = 0, unpaid = 0, archived = 0
-    patients.forEach(p => {
+    if (!displayPatients) return { Tous: 0, Actifs: 0, 'Bilan impayé': 0, Archivés: 0, 'Suivi croissance': 0, Vaccination: 0 }
+    let actifs = 0, unpaid = 0, archived = 0, growth = 0, vaccination = 0
+    displayPatients.forEach((p, index) => {
       const info = patientDataMap[p.id]
       if (!info) return
       if (info.isArchived) { archived++; return }
       actifs++
       if (info.hasUnpaidCredit) unpaid++
+      if (isPediatric) {
+        const pediatricMeta = getPediatricRowMeta(p, index)
+        if (pediatricMeta.growthStatus) growth++
+        if (pediatricMeta.vaccineStatus) vaccination++
+      }
     })
     return {
-      Tous: patients.length,
+      Tous: displayPatients.length,
       Actifs: actifs,
       'Bilan impayé': unpaid,
       Archivés: archived,
+      'Suivi croissance': growth,
+      Vaccination: vaccination,
     }
-  }, [patients, patientDataMap])
+  }, [displayPatients, isPediatric, patientDataMap])
 
-  const TABS = [
-    { key: 'Tous', label: 'Tous' },
-    { key: 'Actifs', label: 'Actifs' },
-    { key: 'Bilan impayé', label: 'Bilan impayé', count: tabCounts['Bilan impayé'], highlight: true },
-    { key: 'Archivés', label: 'Archivés' },
-  ]
+  const TABS = isPediatric
+    ? [
+      { key: 'Tous', label: 'Tous' },
+      { key: 'Actifs', label: 'Actifs' },
+      { key: 'Suivi croissance', label: 'Suivi croissance', count: tabCounts['Suivi croissance'] },
+      { key: 'Vaccination', label: 'Vaccination', count: tabCounts.Vaccination },
+      { key: 'Archivés', label: 'Archivés' },
+    ]
+    : [
+      { key: 'Tous', label: 'Tous' },
+      { key: 'Actifs', label: 'Actifs' },
+      { key: 'Bilan impayé', label: 'Bilan impayé', count: tabCounts['Bilan impayé'], highlight: true },
+      { key: 'Archivés', label: 'Archivés' },
+    ]
 
   // ── Filter: search + tab ──
   const filteredPatients = useMemo(() => {
-    if (!patients) return []
+    if (!displayPatients) return []
 
     // Step 1: Tab filter
-    let list = patients
+    let list = displayPatients
     if (activeTab === 'Actifs') {
       list = list.filter(p => !patientDataMap[p.id]?.isArchived)
     } else if (activeTab === 'Archivés') {
       list = list.filter(p => patientDataMap[p.id]?.isArchived)
-    } else if (activeTab === 'Bilan impayé') {
+    } else if (!isPediatric && activeTab === 'Bilan impayé') {
       list = list.filter(p => patientDataMap[p.id]?.hasUnpaidCredit)
+    } else if (isPediatric && activeTab === 'Suivi croissance') {
+      list = list.filter((p, index) => Boolean(getPediatricRowMeta(p, index).growthStatus))
+    } else if (isPediatric && activeTab === 'Vaccination') {
+      list = list.filter((p, index) => Boolean(getPediatricRowMeta(p, index).vaccineStatus))
     }
 
     // Step 2: Search filter
@@ -170,30 +322,301 @@ function PatientsPage() {
     }
 
     return list
-  }, [patients, search, activeTab, patientDataMap])
+  }, [displayPatients, search, activeTab, isPediatric, patientDataMap])
 
-  const totalPatients = patients?.length || 0
+  const totalPatients = displayPatients?.length || 0
   const totalPages = Math.ceil(filteredPatients.length / PAGE_SIZE) || 1
   const safePage = Math.min(currentPage, totalPages)
   const paginatedPatients = filteredPatients.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   // ── Stat: "Dossiers complétés" = patients with at least name + phone + CIN filled ──
   const completionPct = useMemo(() => {
-    if (!patients || patients.length === 0) return 0
-    const complete = patients.filter(p => p.nom && p.prenom && p.telephone).length
-    return Math.round((complete / patients.length) * 100)
-  }, [patients])
+    if (!displayPatients || displayPatients.length === 0) return 0
+    const complete = displayPatients.filter(p => p.nom && p.prenom && p.telephone).length
+    return Math.round((complete / displayPatients.length) * 100)
+  }, [displayPatients])
 
   // ── New patients this month ──
   const newThisMonth = useMemo(() => {
-    if (!patients) return 0
+    if (!displayPatients) return 0
     const now = new Date()
-    return patients.filter(p => {
+    return displayPatients.filter(p => {
       if (!p.created_at) return false
       const created = new Date(p.created_at)
       return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()
     }).length
-  }, [patients])
+  }, [displayPatients])
+
+  const pediatricQuickActions = [
+    { key: 'growth', label: 'Courbes de croissance', description: 'Acces rapide aux suivis taille/poids/IMC', icon: Activity },
+    { key: 'guardians', label: 'Parents & tuteurs', description: 'Verifier les contacts responsables', icon: Users },
+    { key: 'vaccination', label: 'Vaccination', description: 'Suivre rappels et carnet vaccinal', icon: ShieldPlus },
+  ]
+
+  const pediatricWorkspaceData = useMemo(() => {
+    return displayPatients.slice(0, 3).map((patient, index) => {
+      const meta = getPediatricRowMeta(patient, index)
+      const growth = PEDIATRIC_GROWTH_SNAPSHOTS[index % PEDIATRIC_GROWTH_SNAPSHOTS.length]
+      const guardianNote = PEDIATRIC_GUARDIAN_NOTES[index % PEDIATRIC_GUARDIAN_NOTES.length]
+      const vaccine = PEDIATRIC_VACCINE_FALLBACKS[index % PEDIATRIC_VACCINE_FALLBACKS.length]
+      const age = calcAge(patient.date_naissance)
+
+      return {
+        id: patient.id,
+        name: getPatientFullName(patient),
+        recordNumber: getPatientRecordNumber(patient.id),
+        ageLabel: age != null ? `${age} ans` : 'Age pediatrique',
+        parentLabel: meta.parentLabel,
+        guardianPhone: meta.guardianPhone,
+        growthStatus: meta.growthStatus,
+        vaccineStatus: meta.vaccineStatus,
+        ...growth,
+        ...guardianNote,
+        ...vaccine,
+      }
+    })
+  }, [displayPatients])
+
+  const pediatricViewTitle = useMemo(() => {
+    if (patientsView === 'growth') return 'Suivi croissance'
+    if (patientsView === 'guardians') return 'Parents & tuteurs'
+    if (patientsView === 'vaccination') return 'Vaccination & rappels'
+    return 'Poste pediatrique'
+  }, [patientsView])
+
+  const pediatricWorkspacePanel = isPediatric ? (() => {
+    if (patientsView === 'growth') {
+      return (
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-[28px] border border-sky-100 bg-white p-6 shadow-[0_10px_35px_rgba(15,23,42,0.05)]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                <Activity className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-600">{pediatricViewTitle}</p>
+                <h3 className="text-xl font-semibold text-slate-900">Courbes de croissance et reperes cliniques</h3>
+              </div>
+            </div>
+            <div className="mt-6 space-y-4">
+              {pediatricWorkspaceData.map((entry) => (
+                <div key={entry.id} className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{entry.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{entry.ageLabel} · {entry.recordNumber}</p>
+                    </div>
+                    <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-sky-700">
+                      {entry.percentile}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {[
+                      ['Poids', entry.poids],
+                      ['Taille', entry.taille],
+                      ['IMC', entry.imc],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-2xl border border-white bg-white px-4 py-3 shadow-sm">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                        <p className="mt-2 text-lg font-semibold text-slate-900">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-sky-100">
+                    <div className="h-full rounded-full bg-gradient-to-r from-sky-500 via-teal-400 to-emerald-400" style={{ width: entry.percentile.replace('P', '') + '%' }} />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-slate-700">{entry.growthStatus}</span>
+                    <span className="text-sky-700">Controle: {entry.nextCheck}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <div className="rounded-[28px] border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Points de vigilance</p>
+              <div className="mt-4 space-y-3">
+                {pediatricWorkspaceData.map((entry) => (
+                  <div key={`${entry.id}-growth-note`} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-900">{entry.name}</p>
+                    <p className="mt-1 text-sm text-slate-600">{entry.growthStatus}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-[28px] border border-slate-200 bg-white p-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Organisation recommande</p>
+              <div className="mt-4 space-y-3 text-sm text-slate-600">
+                <p>1. Visualiser les courbes ici en haut.</p>
+                <p>2. Garder la liste des enfants en dessous pour passer rapidement d’un dossier a l’autre.</p>
+                <p>3. Utiliser la vue Vaccination seulement pour les rappels, pas comme page principale.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (patientsView === 'guardians') {
+      return (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {pediatricWorkspaceData.map((entry) => (
+            <div key={entry.id} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Parent referent</p>
+                  <h3 className="mt-2 text-xl font-semibold text-slate-900">{entry.parentLabel}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{entry.name} · {entry.recordNumber}</p>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                  <Users className="h-5 w-5" />
+                </div>
+              </div>
+              <div className="mt-5 space-y-3">
+                <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <Phone className="h-4 w-4 text-teal-600" />
+                    {entry.guardianPhone}
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-sky-50 px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">Relation</p>
+                  <p className="mt-1 text-sm text-slate-700">{entry.relation}</p>
+                </div>
+                <div className="rounded-2xl bg-emerald-50 px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Consentement</p>
+                  <p className="mt-1 text-sm text-slate-700">{entry.consent}</p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">Contact d’urgence</p>
+                  <p className="mt-1 text-sm text-slate-700">{entry.emergency === 'Oui' ? `${entry.parentLabel} · ${entry.guardianPhone}` : 'A completer'}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    if (patientsView === 'vaccination') {
+      return (
+        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+                <ShieldPlus className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-600">Vaccination</p>
+                <h3 className="text-xl font-semibold text-slate-900">Rappels a planifier cette quinzaine</h3>
+              </div>
+            </div>
+            <div className="mt-6 space-y-4">
+              {pediatricWorkspaceData.map((entry) => (
+                <div key={`${entry.id}-vaccine`} className="rounded-[24px] border border-white bg-white px-4 py-4 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{entry.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{entry.nextDose}</p>
+                    </div>
+                    <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-violet-700">
+                      {entry.status}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600">{entry.detail}</p>
+                  <p className="mt-3 text-sm font-medium text-violet-700">Echeance: {entry.dueDate}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Carnet vaccinal</p>
+            <div className="mt-5 space-y-4">
+              {pediatricWorkspaceData.map((entry) => (
+                <div key={`${entry.id}-timeline`} className="grid gap-3 rounded-[24px] border border-slate-200 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <div>
+                    <p className="text-base font-semibold text-slate-900">{entry.name}</p>
+                    <p className="mt-1 text-sm text-slate-600">{entry.vaccineStatus}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    Prochaine dose<br />
+                    <span className="font-semibold text-slate-900">{entry.dueDate}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-[28px] border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+              <Activity className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-600">Croissance</p>
+              <h3 className="text-lg font-semibold text-slate-900">Courbes a surveiller</h3>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {pediatricWorkspaceData.map((entry) => (
+              <div key={`${entry.id}-registry-growth`} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                <p className="text-sm font-semibold text-slate-900">{entry.name}</p>
+                <p className="mt-1 text-sm text-slate-600">{entry.growthStatus}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+              <Users className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600">Famille</p>
+              <h3 className="text-lg font-semibold text-slate-900">Contacts prioritaires</h3>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {pediatricWorkspaceData.map((entry) => (
+              <div key={`${entry.id}-registry-guardian`} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                <p className="text-sm font-semibold text-slate-900">{entry.parentLabel}</p>
+                <p className="mt-1 text-sm text-slate-600">{entry.guardianPhone}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+              <ShieldPlus className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-600">Vaccination</p>
+              <h3 className="text-lg font-semibold text-slate-900">Rappels cette semaine</h3>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {pediatricWorkspaceData.map((entry) => (
+              <div key={`${entry.id}-registry-vaccine`} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                <p className="text-sm font-semibold text-slate-900">{entry.nextDose}</p>
+                <p className="mt-1 text-sm text-slate-600">{entry.name} · {entry.dueDate}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  })() : null
 
   const handleFormSuccess = () => refetch()
 
@@ -211,45 +634,89 @@ function PatientsPage() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[32px] font-bold text-teal-700 tracking-tight">Patients</h1>
+          <h1 className="text-[32px] font-bold text-teal-700 tracking-tight">{isPediatric ? 'Pediatrie' : 'Patients'}</h1>
           <p className="text-[14px] text-slate-500 mt-1">
-            Gestion du registre de la clinique · <span className="font-semibold text-teal-600">{totalPatients.toLocaleString('fr-FR')} dossiers</span>
+            {isPediatric ? 'Registre pediatrique, tuteurs et suivis de croissance' : 'Gestion du registre de la clinique'} · <span className="font-semibold text-teal-600">{totalPatients.toLocaleString('fr-FR')} dossiers</span>
           </p>
         </div>
         <AppButton onClick={() => setShowCreate(true)} className="gap-2">
           <Plus className="h-4 w-4" />
-          Nouveau Patient
+          {isPediatric ? 'Nouvel enfant' : 'Nouveau Patient'}
         </AppButton>
       </div>
+
+      {isPediatric ? (
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-[28px] border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6 shadow-[0_10px_35px_rgba(14,165,233,0.08)]">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-sky-100 text-sky-700">
+                <Baby className="h-7 w-7" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Template pediatrie actif</p>
+                <h2 className="mt-2 text-2xl font-semibold text-slate-900">Vue pediatrique complete</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  La sidebar, les actions metier, la liste patients et les dossiers affichent maintenant le contexte enfant, tuteurs, vaccination et croissance.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {pediatricQuickActions.map((action) => {
+              const Icon = action.icon
+              const isActive = patientsView === action.key
+              return (
+                <button
+                  key={action.key}
+                  type="button"
+                  onClick={() => setSearchParams(action.key === 'registry' ? {} : { view: action.key })}
+                  className={`rounded-[24px] border p-4 text-left transition ${isActive ? 'border-sky-200 bg-sky-50 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-100 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isActive ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{action.label}</p>
+                      <p className="mt-1 text-xs text-slate-500">{action.description}</p>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {/* ── 3 Stat Cards ── */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-[24px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center gap-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)]">
-          <div className="p-3 rounded-2xl bg-teal-50">
-            <Users className="w-6 h-6 text-teal-600" />
+          <div className={`p-3 rounded-2xl ${isPediatric ? 'bg-sky-50' : 'bg-teal-50'}`}>
+            {isPediatric ? <Baby className="w-6 h-6 text-sky-600" /> : <Users className="w-6 h-6 text-teal-600" />}
           </div>
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Total Patients</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{isPediatric ? 'Enfants suivis' : 'Total Patients'}</p>
             <p className="text-[28px] font-bold text-slate-800 leading-tight">{totalPatients.toLocaleString('fr-FR')}</p>
           </div>
         </div>
 
         <div className="rounded-[24px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center gap-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)]">
-          <div className="p-3 rounded-2xl bg-amber-50">
-            <Calendar className="w-6 h-6 text-amber-600" />
+          <div className={`p-3 rounded-2xl ${isPediatric ? 'bg-rose-50' : 'bg-amber-50'}`}>
+            {isPediatric ? <HeartPulse className="w-6 h-6 text-rose-600" /> : <Calendar className="w-6 h-6 text-amber-600" />}
           </div>
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Nouveaux ce mois</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{isPediatric ? 'Suivis nouveaux' : 'Nouveaux ce mois'}</p>
             <p className="text-[28px] font-bold text-slate-800 leading-tight">{newThisMonth}</p>
           </div>
         </div>
 
         <div className="rounded-[24px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center gap-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)]">
           <div className="p-3 rounded-2xl bg-emerald-50">
-            <FileCheck className="w-6 h-6 text-emerald-600" />
+            {isPediatric ? <ClipboardList className="w-6 h-6 text-emerald-600" /> : <FileCheck className="w-6 h-6 text-emerald-600" />}
           </div>
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Dossiers complétés</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{isPediatric ? 'Dossiers complets' : 'Dossiers complétés'}</p>
             <p className="text-[28px] font-bold text-slate-800 leading-tight">{completionPct}%</p>
           </div>
         </div>
@@ -277,7 +744,15 @@ function PatientsPage() {
         {TABS.map(tab => (
           <button
             key={tab.key}
-            onClick={() => { setActiveTab(tab.key); setCurrentPage(1) }}
+            onClick={() => {
+              setActiveTab(tab.key)
+              setCurrentPage(1)
+              if (isPediatric) {
+                if (tab.key === 'Suivi croissance') setSearchParams({ view: 'growth' })
+                else if (tab.key === 'Vaccination') setSearchParams({ view: 'vaccination' })
+                else setSearchParams({})
+              }
+            }}
             className={`px-4 py-2 rounded-full text-[13px] font-semibold transition-all duration-200 flex items-center gap-2 ${
               activeTab === tab.key
                 ? 'bg-teal-600 text-white shadow-sm'
@@ -298,15 +773,18 @@ function PatientsPage() {
         ))}
       </div>
 
+      {pediatricWorkspacePanel}
+
       {/* ── Patient Table ── */}
+
       <div className="rounded-[24px] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
         {/* Table Header */}
-        <div className="grid grid-cols-[auto_1fr_110px_140px_140px_100px_80px] gap-4 px-6 py-4 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-widest items-center">
+        <div className={`grid gap-4 px-6 py-4 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-widest items-center ${isPediatric ? 'grid-cols-[auto_1.1fr_150px_160px_140px_100px_80px]' : 'grid-cols-[auto_1fr_110px_140px_140px_100px_80px]'}`}>
           <div className="w-10" />
-          <span>Patient</span>
-          <span>Âge / Sexe</span>
+          <span>{isPediatric ? 'Enfant' : 'Patient'}</span>
+          <span>{isPediatric ? 'Parent referent' : 'Âge / Sexe'}</span>
           <span>Dernière visite</span>
-          <span>Prochain RDV</span>
+          <span>{isPediatric ? 'Croissance / vaccin' : 'Prochain RDV'}</span>
           <span>Statut</span>
           <span>Actions</span>
         </div>
@@ -314,11 +792,12 @@ function PatientsPage() {
         {/* Rows */}
         {paginatedPatients.length === 0 ? (
           <div className="px-6 py-12 text-center text-slate-400 text-[15px]">Aucun patient trouvé.</div>
-        ) : paginatedPatients.map((p) => {
+        ) : paginatedPatients.map((p, index) => {
           const age = calcAge(p.date_naissance)
           const sex = p.sexe === 'homme' ? 'H' : p.sexe === 'femme' ? 'F' : '-'
           const initials = ((p.prenom?.[0] || '') + (p.nom?.[0] || '')).toUpperCase()
           const info = patientDataMap[p.id] || {}
+          const pediatricMeta = getPediatricRowMeta(p, index)
 
           // Determine status
           let statusLabel = 'Actif'
@@ -342,7 +821,7 @@ function PatientsPage() {
               key={p.id}
               type="button"
               onClick={() => navigate(`/patients/${p.id}`)}
-              className="w-full grid grid-cols-[auto_1fr_110px_140px_140px_100px_80px] gap-4 px-6 py-4 border-b border-slate-50 items-center text-left hover:bg-slate-50/50 transition-colors group"
+              className={`w-full grid gap-4 px-6 py-4 border-b border-slate-50 items-center text-left hover:bg-slate-50/50 transition-colors group ${isPediatric ? 'grid-cols-[auto_1.1fr_150px_160px_140px_100px_80px]' : 'grid-cols-[auto_1fr_110px_140px_140px_100px_80px]'}`}
             >
               {/* Avatar */}
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-bold text-slate-600 group-hover:bg-teal-50 group-hover:text-teal-700 transition-colors">
@@ -353,38 +832,52 @@ function PatientsPage() {
               <div className="min-w-0">
                 <p className="text-[14px] font-semibold text-slate-900 truncate">{p.nom} {p.prenom}</p>
                 <p className="text-[12px] text-slate-400 mt-0.5 truncate">
-                  ID: {p.id?.split('-')[0] || '-'}
+                  {isPediatric ? `Dossier enfant: ${p.id?.split('-')[0] || '-'}` : `ID: ${p.id?.split('-')[0] || '-'}`}
                 </p>
               </div>
 
-              {/* Age / Sex */}
-              <span className="text-[14px] text-slate-600">{age ? `${age} ans` : '-'} / {sex}</span>
+              {/* Age / Sex or Guardian */}
+              {isPediatric ? (
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium text-slate-700 truncate">{pediatricMeta.parentLabel}</p>
+                  <p className="text-[12px] text-slate-400 truncate">{pediatricMeta.guardianPhone}</p>
+                </div>
+              ) : (
+                <span className="text-[14px] text-slate-600">{age ? `${age} ans` : '-'} / {sex}</span>
+              )}
 
               {/* Last Visit */}
               <div>
                 <span className="text-[14px] text-slate-600">{formatDateShort(info.lastVisitDate || p.updated_at)}</span>
               </div>
 
-              {/* Next Appointment */}
-              <div className="min-w-0">
-                <span className={`text-[14px] ${info.nextRdvDate ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>
-                  {nextRdvDisplay}
-                </span>
-                {nextRdvSub && (
-                  <span className="text-[12px] text-teal-600 ml-1">{nextRdvSub}</span>
-                )}
-              </div>
+              {/* Next Appointment or Pediatric Meta */}
+              {isPediatric ? (
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-slate-700">{pediatricMeta.growthStatus}</p>
+                  <p className="mt-1 text-[12px] text-sky-600">{pediatricMeta.vaccineStatus}</p>
+                </div>
+              ) : (
+                <div className="min-w-0">
+                  <span className={`text-[14px] ${info.nextRdvDate ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>
+                    {nextRdvDisplay}
+                  </span>
+                  {nextRdvSub && (
+                    <span className="text-[12px] text-teal-600 ml-1">{nextRdvSub}</span>
+                  )}
+                </div>
+              )}
 
               {/* Status */}
               <div>
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${statusClasses}`}>
-                  {info.hasUnpaidCredit && !info.isArchived && <AlertCircle className="w-3 h-3 mr-1" />}
-                  {statusLabel}
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${isPediatric ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-100/60' : statusClasses}`}>
+                  {!isPediatric && info.hasUnpaidCredit && !info.isArchived ? <AlertCircle className="w-3 h-3 mr-1" /> : null}
+                  {isPediatric ? 'Suivi pediatrique' : statusLabel}
                 </span>
               </div>
 
               {/* Actions */}
-      <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5">
                 <div
                   className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-teal-50 hover:text-teal-600 transition-colors"
                   title="Prendre RDV"

@@ -4,10 +4,12 @@ import { ContentCard } from '../../components/dashboard/DashboardPrimitives'
 import { useAppContext } from '../../context/AppContext'
 import PinLock from '../../components/common/PinLock'
 import { supabase } from '../../lib/supabase'
+import { SPECIALITE_OPTIONS } from '../../data/specialites'
 
 function SettingsPage() {
-  const { currentUser, cabinetId, notificationPrefs, setNotificationPrefs, notify, profile: userProfile } = useAppContext()
+  const { currentUser, cabinetId, notificationPrefs, setNotificationPrefs, notify, specialiteKey, setWorkspaceSpecialiteOverride } = useAppContext()
   const [profile, setProfile] = useState(currentUser)
+  const [selectedSpecialite, setSelectedSpecialite] = useState(specialiteKey)
   const [loading, setLoading] = useState(false)
   const [pinEnabled, setPinEnabled] = useState(
     localStorage.getItem(`pin_enabled_${currentUser?.id}`) === 'true'
@@ -23,6 +25,10 @@ function SettingsPage() {
   const [revokeLoading, setRevokeLoading] = useState(false)
   const [secretary, setSecretary] = useState(null)
   const [secLoading, setSecLoading] = useState(true)
+
+  useEffect(() => {
+    setSelectedSpecialite(specialiteKey)
+  }, [specialiteKey])
 
   // Load current secretary info
   useEffect(() => {
@@ -56,8 +62,9 @@ function SettingsPage() {
     event.preventDefault()
     setLoading(true)
     try {
+      setWorkspaceSpecialiteOverride(selectedSpecialite)
       await new Promise((resolve) => window.setTimeout(resolve, 300))
-      notify({ title: 'Profil sauvegardé', description: 'Les modifications ont été enregistrées.' })
+      notify({ title: 'Profil sauvegarde', description: 'Le template clinique actif a ete mis a jour.' })
     } catch (err) {
       notify({ title: 'Erreur', description: err.message || "Échec de la sauvegarde", tone: 'error' })
     } finally {
@@ -197,6 +204,21 @@ function SettingsPage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <ContentCard title="Profil du cabinet" subtitle="Met à jour le praticien affiché partout dans l'application">
           <form className="space-y-4" onSubmit={handleProfileSubmit}>
+            <label className="block">
+              <span className="mb-2 block text-base font-medium text-slate-700">Template de specialite</span>
+              <select
+                value={selectedSpecialite}
+                onChange={(event) => setSelectedSpecialite(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-300"
+              >
+                {SPECIALITE_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
+                ))}
+              </select>
+              <p className="mt-2 text-sm text-slate-500">
+                Ce choix pilote le template global. Les donnees affiches en medecine generale et en pediatrie sont volontairement differentes.
+              </p>
+            </label>
             {[
               ['name', 'Nom'],
               ['specialty', 'Spécialité'],

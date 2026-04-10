@@ -13,6 +13,7 @@ import AppointmentsPage from './pages/dashboard/AppointmentsPage'
 import AnalyticsDashboardPage from './pages/dashboard/AnalyticsDashboardPage'
 import BillingPage from './pages/dashboard/BillingPage'
 import PatientsPage from './pages/dashboard/PatientsPage'
+import PatientDashboardPage from './pages/dashboard/PatientDashboardPage'
 import BilingualPrescriptionsPage from './pages/dashboard/BilingualPrescriptionsPage'
 import StatisticsPage from './pages/dashboard/StatisticsPage'
 import WaitingRoomPage from './pages/dashboard/WaitingRoomPage'
@@ -56,7 +57,9 @@ function App() {
           <Route path="/facturation" element={<BillingPage />} />
           <Route path="/facturation/:id" element={<BillingPage />} />
           <Route path="/patients" element={<PatientsPage />} />
-          <Route path="/patients/:id" element={<PatientsPage />} />
+          <Route path="/patients/:id" element={<PatientDashboardPage />} />
+          <Route path="/patients/:id/info" element={<PatientDashboardPage />} />
+          <Route path="/patients/:id/consultations/:consultationId" element={<PatientDashboardPage />} />
 
           {/* DOCTEUR ONLY ROUTES */}
           <Route

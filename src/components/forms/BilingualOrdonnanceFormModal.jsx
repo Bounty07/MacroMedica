@@ -8,7 +8,15 @@ import { createConsultation, createDocument, getPatients } from '../../lib/api'
 import { createEmptyPrescriptionMedication } from '../../lib/prescriptionUtils'
 import { supabase } from '../../lib/supabase'
 
-export default function BilingualOrdonnanceFormModal({ open, onClose, onSuccess }) {
+export default function BilingualOrdonnanceFormModal({
+  open,
+  onClose,
+  onSuccess,
+  initialPatientId = '',
+  initialDate = '',
+  initialMedications = null,
+  initialInstructions = '',
+}) {
   const { notify, profile, cabinet, specialiteConfig } = useAppContext()
   const { cabinetId } = useCabinetId()
 
@@ -38,11 +46,11 @@ export default function BilingualOrdonnanceFormModal({ open, onClose, onSuccess 
     if (!open) return
 
     setForm({
-      patient_id: '',
-      date: new Date().toISOString().split('T')[0],
+      patient_id: initialPatientId || '',
+      date: initialDate || new Date().toISOString().split('T')[0],
       ville: cabinet?.adresse?.split(',')[0] || cabinet?.ville || '',
-      medicaments: [createEmptyPrescriptionMedication()],
-      instructions: '',
+      medicaments: initialMedications?.length ? initialMedications : [createEmptyPrescriptionMedication()],
+      instructions: initialInstructions || '',
       instructions_en: '',
       signe: true,
       nomMedecin: profile?.nom_complet || '',
@@ -51,7 +59,7 @@ export default function BilingualOrdonnanceFormModal({ open, onClose, onSuccess 
       telephone: cabinet?.telephone || '',
     })
     setError('')
-  }, [open, profile, cabinet, specialiteConfig.label])
+  }, [open, profile, cabinet, specialiteConfig.label, initialDate, initialInstructions, initialMedications, initialPatientId])
 
   const handleMedicationChange = (id, key, value) => {
     setForm((current) => ({

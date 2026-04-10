@@ -1,8 +1,11 @@
 import { Bot, FileSearch, Loader2, Mic, PauseCircle, Sparkles, Stethoscope, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useMatch } from 'react-router-dom'
 import AiConsultantCard from '../ui/AiConsultantCard'
 import AiLabReaderCard from '../ui/AiLabReaderCard'
 import AiScribeCard from '../ui/AiScribeCard'
+import { getPatientById } from '../../lib/api'
 
 const TOOLS = [
   {
@@ -10,7 +13,7 @@ const TOOLS = [
     label: 'AI Scribe',
     description: 'Dictee et reformulation clinique',
     icon: Stethoscope,
-    render: () => <AiScribeCard />,
+    render: (context) => <AiScribeCard {...context} />,
   },
   {
     id: 'lab-reader',
@@ -63,6 +66,21 @@ export default function FloatingAiHub({
 }) {
   const [open, setOpen] = useState(false)
   const [activeTool, setActiveTool] = useState(TOOLS[0].id)
+  const patientRouteMatch = useMatch('/patients/:id')
+  const patientConsultationRouteMatch = useMatch('/patients/:id/consultations/:consultationId')
+  const patientInfoRouteMatch = useMatch('/patients/:id/info')
+  const activePatientId =
+    patientConsultationRouteMatch?.params.id ||
+    patientInfoRouteMatch?.params.id ||
+    patientRouteMatch?.params.id ||
+    null
+  const { data: activePatient, isLoading: isLoadingActivePatient } = useQuery({
+    queryKey: ['ai-hub-active-patient', activePatientId],
+    queryFn: () => getPatientById(activePatientId),
+    enabled: open && Boolean(activePatientId),
+    staleTime: 60_000,
+    retry: 1,
+  })
 
   useEffect(() => {
     if (!open) return undefined
@@ -84,6 +102,11 @@ export default function FloatingAiHub({
     () => TOOLS.find((item) => item.id === activeTool) || TOOLS[0],
     [activeTool],
   )
+  const aiToolContext = useMemo(() => ({
+    activePatientId,
+    activePatientRecord: activePatient || null,
+    patientLocked: Boolean(activePatientId),
+  }), [activePatient, activePatientId])
   const voiceStatus = voiceCommandProcessing
     ? 'Analyse de la commande en cours...'
     : voiceCommandRecording
@@ -152,6 +175,33 @@ export default function FloatingAiHub({
                     </button>
                   </div>
                 </div>
+                <div className="mt-4 rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Contexte patient</p>
+                  {activePatientId ? (
+                    isLoadingActivePatient ? (
+                      <div className="mt-3 space-y-2">
+                        <div className="h-4 w-1/2 animate-pulse rounded bg-slate-200" />
+                        <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200" />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                          Patient actif
+                        </div>
+                        <p className="mt-3 text-sm font-bold text-slate-900">
+                          {activePatient?.nom} {activePatient?.prenom}
+                        </p>
+                        <p className="mt-1 text-xs leading-6 text-slate-500">
+                          Ce patient est detecte automatiquement depuis la page ouverte. Les outils cliniques utiliseront ce contexte sans demander une nouvelle selection.
+                        </p>
+                      </>
+                    )
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      Aucun dossier patient actif. Le Hub reste disponible en mode global avec selection manuelle si necessaire.
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 type="button"
@@ -173,7 +223,7 @@ export default function FloatingAiHub({
             </div>
 
             <div className="min-h-0 overflow-y-auto bg-white">
-              {activeToolConfig.render()}
+              {activeToolConfig.render(aiToolContext)}
             </div>
           </div>
         </div>

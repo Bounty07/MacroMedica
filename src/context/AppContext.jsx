@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { RDV_STATUSES } from '../lib/workflow'
-import { getSpecialiteConfig, normalizeSpecialiteKey } from '../data/specialites'
+import { DEFAULT_SPECIALITE_KEY, getSpecialiteConfig, normalizeSpecialiteKey } from '../data/specialites'
 
 const AppContext = createContext(null)
 const PREFS_KEY = 'macromedica-notification-prefs'
+const SPECIALITE_OVERRIDE_KEY = 'macromedica-workspace-specialite'
 
 const buildId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
@@ -37,6 +38,13 @@ export function AppProvider({ children }) {
       return JSON.parse(localStorage.getItem(PREFS_KEY) || '{"email":true,"browser":true,"reminders":true}')
     } catch {
       return { email: true, browser: true, reminders: true }
+    }
+  })
+  const [workspaceSpecialiteOverride, setWorkspaceSpecialiteOverride] = useState(() => {
+    try {
+      return normalizeSpecialiteKey(localStorage.getItem(SPECIALITE_OVERRIDE_KEY))
+    } catch {
+      return DEFAULT_SPECIALITE_KEY
     }
   })
 
@@ -168,6 +176,10 @@ export function AppProvider({ children }) {
   }, [notificationPrefs])
 
   useEffect(() => {
+    localStorage.setItem(SPECIALITE_OVERRIDE_KEY, workspaceSpecialiteOverride || DEFAULT_SPECIALITE_KEY)
+  }, [workspaceSpecialiteOverride])
+
+  useEffect(() => {
     if (!cabinetId) return
 
     // Centralized realtime sync for the dashboard / waiting room
@@ -279,8 +291,8 @@ export function AppProvider({ children }) {
   const workspaceRole = isSecretary ? 'secretaire' : 'admin'
   const cabinet = profile?.cabinets || profile?.clinics || null
   const cabinetSpecialite = cabinet?.specialite || null
-  const specialiteKey = normalizeSpecialiteKey(cabinetSpecialite)
-  const specialiteConfig = getSpecialiteConfig(cabinetSpecialite)
+  const specialiteKey = workspaceSpecialiteOverride || normalizeSpecialiteKey(cabinetSpecialite)
+  const specialiteConfig = getSpecialiteConfig(specialiteKey)
 
   const value = useMemo(() => ({
     user,
@@ -292,6 +304,7 @@ export function AppProvider({ children }) {
     cabinet,
     cabinetId: profile?.cabinet_id,
     cabinetSpecialite,
+    workspaceSpecialiteOverride,
     specialiteKey,
     specialiteConfig,
     currentUser: profile
@@ -309,6 +322,9 @@ export function AppProvider({ children }) {
     logout,
 
     setNotificationPrefs,
+    setWorkspaceSpecialiteOverride(nextValue) {
+      setWorkspaceSpecialiteOverride(normalizeSpecialiteKey(nextValue))
+    },
     openGlobalModal(type, payload = {}) { setGlobalModal({ type, payload }) },
     closeGlobalModal() { setGlobalModal(null) },
     requestConfirmation(config) { setConfirmDialog(config) },
@@ -339,7 +355,7 @@ export function AppProvider({ children }) {
         loadConsultations(profile.cabinet_id)
       }
     },
-  }), [user, profile, role, isSecretary, isAdmin, workspaceRole, cabinet, cabinetSpecialite, specialiteKey, specialiteConfig, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, inboxAlertCount, patients, rdvList, consultations, waitingList, registerVoiceCommandHandler, runVoiceCommandHandler])
+  }), [user, profile, role, isSecretary, isAdmin, workspaceRole, cabinet, cabinetSpecialite, workspaceSpecialiteOverride, specialiteKey, specialiteConfig, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, inboxAlertCount, patients, rdvList, consultations, waitingList, registerVoiceCommandHandler, runVoiceCommandHandler])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

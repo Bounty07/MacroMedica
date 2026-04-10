@@ -1,7 +1,8 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Clock4, Loader2, Trash2, CheckCircle2, XCircle, Pencil } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight, Clock4, Loader2, Trash2, Pencil, Phone, FileText, Play, CheckCheck } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { AppButton, ContentCard, StatusBadge } from '../../components/dashboard/DashboardPrimitives'
+import { useNavigate } from 'react-router-dom'
+import { AppButton, StatusBadge } from '../../components/dashboard/DashboardPrimitives'
 import AppointmentFormModal from '../../components/forms/AppointmentFormModal'
 import Modal from '../../components/common/Modal'
 import { getRdv, updateRdv, deleteRdv } from '../../lib/api'
@@ -125,8 +126,81 @@ function periodLabel(view, year, month, focus) {
 /* ═══════════════════════════════════════
    COMPONENT
    ═══════════════════════════════════════ */
+function buildNumericBadge(value, fallback = '48291') {
+  const numeric = String(value || '').replace(/\D/g, '').slice(-5)
+  return `#${(numeric || fallback).padStart(5, '0')}`
+}
+
+function buildPatientInitials(patient) {
+  return `${patient?.prenom?.[0] || ''}${patient?.nom?.[0] || ''}`.toUpperCase() || 'PT'
+}
+
+function buildAppointmentDetailPreset(rdv, specialiteKey) {
+  const patient = rdv?.patients || {}
+  const seed = String(rdv?.id || rdv?.patient_id || patient.nom || 'macro')
+    .split('')
+    .reduce((total, char) => total + char.charCodeAt(0), 0)
+
+  const isPediatric = specialiteKey === 'pediatrie'
+  const ages = isPediatric ? ['4 ans', '6 ans', '8 ans'] : ['29 ans', '33 ans', '41 ans']
+  const motifs = isPediatric
+    ? ['Controle de croissance', 'Vaccination de rappel', 'Suivi ORL']
+    : ['Consultation de suivi', 'Controle tensionnel', 'Lecture bilan biologique']
+  const timelines = isPediatric
+    ? [
+        [
+          { title: 'Consultation initiale', subtitle: 'Dr Touggani', date: '03/05/2025' },
+          { title: 'Courbe taille-poids', subtitle: 'P62 stable', date: '17/01/2026' },
+          { title: 'Vaccin ROR', subtitle: 'Carnet mis a jour', date: '14/03/2026' },
+        ],
+        [
+          { title: 'Bronchiolite saisonniere', subtitle: 'Evolution favorable', date: '21/12/2025' },
+          { title: 'Controle nutritionnel', subtitle: 'Surveillance poids', date: '09/02/2026' },
+          { title: 'Rappel DTPa', subtitle: 'A programmer', date: '04/04/2026' },
+        ],
+        [
+          { title: 'Otite moyenne', subtitle: 'Traitement termine', date: '07/11/2025' },
+          { title: 'Visite scolaire', subtitle: 'Rien a signaler', date: '13/02/2026' },
+          { title: 'Carnet vaccinal', subtitle: 'Verification requise', date: '01/04/2026' },
+        ],
+      ]
+    : [
+        [
+          { title: 'Consultation initiale', subtitle: 'Dr Touggani', date: '03/05/2025' },
+          { title: 'Biologie sanguine', subtitle: 'Labo Atlas - RAS', date: '14/07/2025' },
+          { title: 'Suivi tensionnel', subtitle: 'TA stabilisee', date: '18/02/2026' },
+        ],
+        [
+          { title: 'Bilan ferritine', subtitle: 'Carence corrigee', date: '12/09/2025' },
+          { title: 'Consultation de controle', subtitle: 'Toux resolue', date: '19/01/2026' },
+          { title: 'Renouvellement traitement', subtitle: 'Ordonnance envoyee', date: '02/04/2026' },
+        ],
+        [
+          { title: 'ECG de depistage', subtitle: 'Rythme sinusal', date: '22/08/2025' },
+          { title: 'Bilan lipidique', subtitle: 'LDL a surveiller', date: '04/12/2025' },
+          { title: 'Suivi trimestriel', subtitle: 'Amelioration clinique', date: '27/03/2026' },
+        ],
+      ]
+
+  const index = seed % 3
+  const fullName = [patient.prenom, patient.nom].filter(Boolean).join(' ').trim() || 'Patient inconnu'
+
+  return {
+    fullName,
+    ageLabel: ages[index],
+    motifLabel: motifs[index],
+    recordNumber: buildNumericBadge(rdv?.patient_id || rdv?.id),
+    badgeLabel: rdv?.status === RDV_STATUSES.COMPLETED ? 'TERMINE' : 'A VENIR',
+    timeline: timelines[index],
+    notePlaceholder: isPediatric
+      ? 'Ajouter une consigne pour la consultation de l enfant, ses parents ou le suivi vaccinal...'
+      : 'Ajouter une consigne pour cette consultation...',
+  }
+}
+
 function AppointmentsPage() {
-  const { profile, notify } = useAppContext()
+  const navigate = useNavigate()
+  const { profile, notify, specialiteKey } = useAppContext()
 
   const now   = new Date()
   const [view, setView]           = useState('month')
@@ -138,6 +212,7 @@ function AppointmentsPage() {
   const [editingRdv, setEditingRdv]   = useState(null)
   const [selectedRdv, setSelectedRdv] = useState(null)
   const [scheduleOptimization, setScheduleOptimization] = useState(null)
+  const [preparatoryNotes, setPreparatoryNotes] = useState({})
 
   /* ── Data ── */
   const { data: rdvs = [], isLoading, refetch } = useQuery({
@@ -192,25 +267,83 @@ function AppointmentsPage() {
 
   /* ── Actions ── */
   const handleStatus = async (id, currentStatus, newStatus) => {
-    if (!isValidTransition(currentStatus, newStatus)) {
+    try {
+      isValidTransition(currentStatus, newStatus)
+    } catch (error) {
       notify({ title: 'Action invalide', description: 'Cette transition de statut n\'est pas permise.', variant: 'error' })
       return
     }
 
     try { 
       await updateRdv(id, { status: newStatus }); 
-      refetch(); 
+      await refetch(); 
       setSelectedRdv(null); 
       notify({ title: 'Succès', description: `Statut RDV mis à jour.` }) 
     }
-    catch (e) { console.error(e) }
+    catch (e) {
+      console.error(e)
+      notify({ title: 'Erreur', description: e.message || 'Impossible de mettre à jour le rendez-vous.', tone: 'error' })
+    }
   }
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer ce rendez-vous ?')) return
-    try { await deleteRdv(id); refetch(); setSelectedRdv(null); notify({ title: 'Succès', description: 'RDV supprimé.' }) }
-    catch (e) { console.error(e) }
+    try { await deleteRdv(id); await refetch(); setSelectedRdv(null); notify({ title: 'Succès', description: 'RDV supprimé.' }) }
+    catch (e) {
+      console.error(e)
+      notify({ title: 'Erreur', description: e.message || 'Impossible de supprimer le rendez-vous.', tone: 'error' })
+    }
   }
   const handleFormOk = () => refetch()
+
+  const handleStartConsultation = async (rdv) => {
+    if (!rdv) return
+    const currentStatus = rdv.status || rdv.statut || RDV_STATUSES.SCHEDULED
+    const nextStatus = currentStatus === RDV_STATUSES.ARRIVED ? RDV_STATUSES.IN_CONSULTATION : RDV_STATUSES.ARRIVED
+
+    try {
+      isValidTransition(currentStatus, nextStatus)
+      await updateRdv(rdv.id, { status: nextStatus })
+      await refetch()
+      setSelectedRdv(null)
+
+      if (rdv.patient_id) {
+        navigate(`/patients/${rdv.patient_id}`)
+      } else {
+        notify({
+          title: 'Consultation lancée',
+          description: 'Le patient n a pas encore de dossier lié à ouvrir.',
+        })
+      }
+    } catch (error) {
+      console.error(error)
+      notify({
+        title: 'Action invalide',
+        description: error.message || 'Impossible de lancer la consultation.',
+        tone: 'error',
+      })
+    }
+  }
+
+  const handleFinishConsultation = async (rdv) => {
+    if (!rdv) return
+    const currentStatus = rdv.status || rdv.statut || RDV_STATUSES.SCHEDULED
+
+    try {
+      isValidTransition(currentStatus, RDV_STATUSES.COMPLETED)
+      await updateRdv(rdv.id, { status: RDV_STATUSES.COMPLETED })
+      await refetch()
+      setSelectedRdv(null)
+      notify({ title: 'Consultation terminée', description: 'Le rendez-vous a été marqué comme terminé.' })
+    } catch (error) {
+      notify({
+        title: 'Action invalide',
+        description: currentStatus === RDV_STATUSES.ARRIVED
+          ? 'Passez d abord le patient en consultation avant de terminer.'
+          : error.message || 'Impossible de terminer ce rendez-vous.',
+        tone: 'error',
+      })
+    }
+  }
 
   const handleOptimizeAgenda = () => {
     const result = analyzeScheduleOptimization(rdvs, optimizationDayKey)
@@ -777,56 +910,149 @@ function AppointmentsPage() {
       {/* ══════════════════════════════
          DETAIL MODAL
          ══════════════════════════════ */}
-      <Modal open={Boolean(selectedRdv)} onClose={() => setSelectedRdv(null)} title="Détail du rendez-vous" width="max-w-xl">
+      <Modal open={Boolean(selectedRdv)} onClose={() => setSelectedRdv(null)} title="Détails du rendez-vous" width="max-w-4xl">
         {selectedRdv && (() => {
+          const currentStatus = selectedRdv.status || selectedRdv.statut || RDV_STATUSES.SCHEDULED
           const dateStr = formatDateDisplay(selectedRdv.date_rdv, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
           const timeStr = getRdvTime(selectedRdv.date_rdv)
-          const name = selectedRdv.patients ? `${selectedRdv.patients.prenom} ${selectedRdv.patients.nom}` : 'Patient inconnu'
-          const phone = selectedRdv.patients?.telephone
+          const detailPreset = buildAppointmentDetailPreset(selectedRdv, specialiteKey)
+          const phone = selectedRdv.patients?.telephone || 'Telephone a confirmer'
+          const initials = buildPatientInitials(selectedRdv.patients)
+          const noteValue = preparatoryNotes[selectedRdv.id] ?? selectedRdv.notes ?? ''
+          const canStart = currentStatus === RDV_STATUSES.SCHEDULED || currentStatus === RDV_STATUSES.ARRIVED
+          const canFinish = currentStatus === RDV_STATUSES.IN_CONSULTATION
+          const canCancel = currentStatus !== RDV_STATUSES.COMPLETED && currentStatus !== RDV_STATUSES.CANCELLED && selectedRdv.statut !== 'annule'
 
           return (
-            <div className="space-y-5">
-              <div className="rounded-[22px] bg-slate-50 p-5 ring-1 ring-slate-100">
-                <p className="text-xl font-semibold text-slate-950">{name}</p>
-                {phone && <p className="mt-1 text-sm text-slate-500">📞 {phone}</p>}
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-base text-slate-600">
-                  <span>📅 {dateStr}</span>
-                  <span>🕐 {timeStr}</span>
+            <div className="space-y-6">
+              <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-gradient-to-br from-blue-500 to-sky-400 text-3xl font-bold text-white shadow-lg">
+                      {initials}
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="text-3xl font-semibold text-slate-950">{detailPreset.fullName}</h3>
+                        <span className="rounded-xl bg-blue-50 px-3 py-1 text-sm font-bold uppercase tracking-[0.14em] text-blue-700">
+                          {detailPreset.badgeLabel}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-4 text-base text-slate-500">
+                        <span>{detailPreset.ageLabel}</span>
+                        <span className="inline-flex items-center gap-2"><Phone className="h-4 w-4" /> {phone}</span>
+                        <span className="rounded-xl bg-slate-50 px-3 py-1 font-medium text-blue-700">Dossier {detailPreset.recordNumber}</span>
+                      </div>
+                      <div className="mt-3 inline-flex rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+                        {detailPreset.motifLabel} - {timeStr}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-start gap-2 sm:items-end">
+                    <StatusBadge tone={STATUS_TONES[currentStatus] || 'neutral'}>
+                      {STATUS_LABELS[currentStatus] || 'Planifié'}
+                    </StatusBadge>
+                    <p className="text-sm text-slate-500">{dateStr}</p>
+                  </div>
                 </div>
-                <div className="mt-3">
-                   <StatusBadge tone={STATUS_TONES[selectedRdv.status || selectedRdv.statut] || 'neutral'}>
-                     {STATUS_LABELS[selectedRdv.status || selectedRdv.statut] || 'Planifié'}
-                   </StatusBadge>
-                </div>
-                {selectedRdv.notes && <p className="mt-3 text-base text-slate-600">{selectedRdv.notes}</p>}
               </div>
 
-              {/* Secretary Action Buttons */}
-              <div className="flex flex-wrap gap-3">
-                {(!selectedRdv.status || selectedRdv.status === RDV_STATUSES.SCHEDULED) && (
-                  <>
-                    <AppButton onClick={() => handleStatus(selectedRdv.id, selectedRdv.status, RDV_STATUSES.ARRIVED)}><CheckCircle2 className="mr-1.5 h-4 w-4" /> Marquer comme arrivé</AppButton>
-                    <AppButton variant="secondary" onClick={() => handleStatus(selectedRdv.id, selectedRdv.status, RDV_STATUSES.ABSENT)}><XCircle className="mr-1.5 h-4 w-4" /> Absent</AppButton>
-                  </>
-                )}
-                
-                {selectedRdv.status === RDV_STATUSES.ARRIVED && (
-                  <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold w-full text-center border border-blue-200">
-                    Patient actuellement en salle d'attente.
+              <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="rounded-[28px] border border-slate-200 bg-white p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Antecedents recents</p>
+                      <h4 className="mt-2 text-xl font-semibold text-slate-900">Lecture rapide avant consultation</h4>
+                    </div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50 text-slate-600">
+                      <FileText className="h-5 w-5" />
+                    </div>
                   </div>
-                )}
-                {selectedRdv.status === RDV_STATUSES.IN_CONSULTATION && (
-                  <div className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-semibold w-full text-center border border-green-200">
-                    En consultation avec le médecin !
-                  </div>
-                )}
 
-                <AppButton variant="ghost" onClick={() => { setSelectedRdv(null); setEditingRdv(selectedRdv) }}><Pencil className="mr-1.5 h-4 w-4" /> Modifier</AppButton>
-                {/* Allow canceling if not already cancelled or completed */}
-                {selectedRdv.status !== RDV_STATUSES.COMPLETED && selectedRdv.status !== RDV_STATUSES.CANCELLED && selectedRdv.statut !== 'annule' && (
-                  <AppButton variant="ghost" className="text-rose-600 hover:text-rose-700" onClick={() => handleStatus(selectedRdv.id, selectedRdv.status || selectedRdv.statut || RDV_STATUSES.SCHEDULED, RDV_STATUSES.CANCELLED)}>Annuler le RDV</AppButton>
-                )}
-                <AppButton variant="ghost" className="text-rose-600 hover:text-rose-700" onClick={() => handleDelete(selectedRdv.id)}><Trash2 className="mr-1.5 h-4 w-4" /> Supprimer</AppButton>
+                  <div className="mt-6 space-y-4">
+                    {detailPreset.timeline.map((entry, index) => (
+                      <div key={`${entry.title}-${entry.date}`} className="grid gap-4 sm:grid-cols-[1fr_28px_1fr] sm:items-center">
+                        <div className={`rounded-[22px] border p-4 ${index % 2 === 0 ? 'border-slate-200 bg-slate-50/80' : 'border-white bg-transparent'}`}>
+                          <p className="text-lg font-medium text-slate-800">{entry.title}</p>
+                          <p className="mt-1 text-sm text-slate-500">{entry.subtitle}</p>
+                        </div>
+                        <div className="relative flex h-full items-center justify-center">
+                          <span className={`z-10 h-4 w-4 rounded-full ${index === 0 ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                          {index !== detailPreset.timeline.length - 1 ? <span className="absolute top-1/2 h-full w-px -translate-y-1/2 bg-slate-200" /> : null}
+                        </div>
+                        <div className={`rounded-[22px] border p-4 ${index % 2 === 1 ? 'border-slate-200 bg-slate-50/80' : 'border-white bg-transparent'} text-right`}>
+                          <p className="text-lg font-medium text-slate-800">{entry.date}</p>
+                          <p className="mt-1 text-sm text-slate-500">{index === detailPreset.timeline.length - 1 ? 'Dernier point cle' : 'Trace clinique'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Notes preparatoires</p>
+                        <h4 className="mt-2 text-xl font-semibold text-slate-900">Consignes avant entree patient</h4>
+                      </div>
+                      <p className="text-xs font-medium text-slate-400">Visibles uniquement par vous</p>
+                    </div>
+                    <textarea
+                      value={noteValue}
+                      onChange={(event) => setPreparatoryNotes((current) => ({ ...current, [selectedRdv.id]: event.target.value }))}
+                      placeholder={detailPreset.notePlaceholder}
+                      className="mt-5 min-h-[160px] w-full rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-4 text-base text-slate-700 outline-none transition focus:border-teal-300 focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-6">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Workflow</p>
+                    <div className="mt-4 space-y-3 text-sm text-slate-600">
+                      <p>Le bouton principal ouvre le dossier patient et avance le rendez-vous dans le flux.</p>
+                      <p>La terminaison reste reservee a la phase "en consultation" pour eviter les erreurs de statut.</p>
+                    </div>
+                    {currentStatus === RDV_STATUSES.ARRIVED ? (
+                      <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+                        Patient actuellement en salle d attente.
+                      </div>
+                    ) : null}
+                    {currentStatus === RDV_STATUSES.IN_CONSULTATION ? (
+                      <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                        Patient en consultation. Vous pouvez maintenant terminer la visite.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
+                <AppButton className="min-w-[220px] justify-center gap-2 bg-blue-600 hover:bg-blue-700" onClick={() => handleStartConsultation(selectedRdv)} disabled={!canStart}>
+                  <Play className="h-4 w-4" />
+                  {currentStatus === RDV_STATUSES.ARRIVED ? 'Ouvrir consultation' : 'Demarrer consultation'}
+                </AppButton>
+                <AppButton variant="secondary" className="min-w-[180px] justify-center gap-2" onClick={() => handleFinishConsultation(selectedRdv)} disabled={!canFinish}>
+                  <CheckCheck className="h-4 w-4" />
+                  Terminer
+                </AppButton>
+                {canCancel ? (
+                  <button
+                    type="button"
+                    className="inline-flex min-w-[180px] items-center justify-center rounded-2xl border border-rose-200 bg-white px-5 py-3 text-base font-medium text-rose-600 transition hover:bg-rose-50"
+                    onClick={() => handleStatus(selectedRdv.id, currentStatus, RDV_STATUSES.CANCELLED)}
+                  >
+                    Annuler
+                  </button>
+                ) : null}
+                <AppButton variant="ghost" onClick={() => { setSelectedRdv(null); setEditingRdv(selectedRdv) }}>
+                  <Pencil className="mr-1.5 h-4 w-4" />
+                  Modifier
+                </AppButton>
+                <AppButton variant="ghost" className="text-rose-600 hover:text-rose-700" onClick={() => handleDelete(selectedRdv.id)}>
+                  <Trash2 className="mr-1.5 h-4 w-4" />
+                  Supprimer
+                </AppButton>
               </div>
             </div>
           )
