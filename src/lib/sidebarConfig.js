@@ -1,6 +1,4 @@
 export function getSidebarForRole(role, specialiteKey = 'medecine-generale') {
-  const isPediatric = specialiteKey === 'pediatrie'
-
   switch (role) {
     case 'docteur':
       return [
@@ -21,14 +19,6 @@ export function getSidebarForRole(role, specialiteKey = 'medecine-generale') {
             { label: 'Ordonnances / Prescriptions', to: '/ordonnances', icon: 'file-pen-line' },
           ],
         },
-        ...(isPediatric ? [{
-          label: 'PEDIATRIE',
-          items: [
-            { label: 'Courbes de croissance', to: '/patients?view=growth', icon: 'chart-column-big' },
-            { label: 'Parents & Tuteurs', to: '/patients?view=guardians', icon: 'users-round' },
-            { label: 'Vaccination & Suivi', to: '/patients?view=vaccination', icon: 'stethoscope' },
-          ],
-        }] : []),
         {
           label: 'SECRETAIRES',
           items: [
