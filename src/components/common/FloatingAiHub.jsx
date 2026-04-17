@@ -1,10 +1,12 @@
-import { Bot, FileSearch, Loader2, Mic, PauseCircle, Sparkles, Stethoscope, X } from 'lucide-react'
+import { Bot, FileSearch, FileText, Pill, Sparkles, Stethoscope, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useMatch } from 'react-router-dom'
 import AiConsultantCard from '../ui/AiConsultantCard'
+import AiLetterGeneratorCard from '../ui/AiLetterGeneratorCard'
 import AiLabReaderCard from '../ui/AiLabReaderCard'
 import AiScribeCard from '../ui/AiScribeCard'
+import AiTherapeuticAssistantCard from '../ui/AiTherapeuticAssistantCard'
 import { getPatientById } from '../../lib/api'
 
 const TOOLS = [
@@ -21,6 +23,20 @@ const TOOLS = [
     description: 'Analyse de bilans et documents',
     icon: FileSearch,
     render: () => <AiLabReaderCard />,
+  },
+  {
+    id: 'letters',
+    label: 'Générateur de Courriers',
+    description: 'Rédaction automatique de lettres de liaison',
+    icon: FileText,
+    render: (context) => <AiLetterGeneratorCard {...context} />,
+  },
+  {
+    id: 'therapeutics',
+    label: 'Assistant Thérapeutique',
+    description: 'Aide à la prescription et alertes médicamenteuses',
+    icon: Pill,
+    render: (context) => <AiTherapeuticAssistantCard {...context} />,
   },
   {
     id: 'insights',
@@ -59,13 +75,19 @@ function ToolTab({ item, active, onClick }) {
 
 export default function FloatingAiHub({
   isProcessing = false,
-  voiceCommandSupported = true,
-  voiceCommandRecording = false,
-  voiceCommandProcessing = false,
-  onToggleVoiceCommand,
 }) {
   const [open, setOpen] = useState(false)
   const [activeTool, setActiveTool] = useState(TOOLS[0].id)
+  const [mockPatientContext] = useState({
+    id: 'mock-karim-benali',
+    name: 'Karim Benali',
+    age: 45,
+    weight: '82kg',
+    allergies: ['Pénicilline'],
+    currentMedication: ['Paracétamol'],
+    nom: 'Benali',
+    prenom: 'Karim',
+  })
   const patientRouteMatch = useMatch('/patients/:id')
   const patientConsultationRouteMatch = useMatch('/patients/:id/consultations/:consultationId')
   const patientInfoRouteMatch = useMatch('/patients/:id/info')
@@ -106,14 +128,8 @@ export default function FloatingAiHub({
     activePatientId,
     activePatientRecord: activePatient || null,
     patientLocked: Boolean(activePatientId),
-  }), [activePatient, activePatientId])
-  const voiceStatus = voiceCommandProcessing
-    ? 'Analyse de la commande en cours...'
-    : voiceCommandRecording
-      ? 'Enregistrement actif. Recliquez pour envoyer.'
-      : voiceCommandSupported
-        ? 'Agent vocal pret pour le Darija, le francais et l anglais.'
-        : "Le micro n'est pas disponible sur cet appareil."
+    mockPatientContext,
+  }), [activePatient, activePatientId, mockPatientContext])
 
   return (
     <>
@@ -145,62 +161,29 @@ export default function FloatingAiHub({
                 <p className="mt-2 text-sm leading-7 text-slate-500">
                   Retrouvez vos outils IA dans un seul espace, accessibles depuis n importe quel onglet.
                 </p>
-                <div className="mt-5 rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Agent vocal</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">Tony Stark Mode</p>
-                      <p className="mt-1 text-xs leading-6 text-slate-500">{voiceStatus}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={onToggleVoiceCommand}
-                      disabled={!voiceCommandSupported || voiceCommandProcessing}
-                      className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${
-                        voiceCommandRecording
-                          ? 'border-rose-200 bg-rose-50 text-rose-700'
-                          : voiceCommandProcessing
-                            ? 'border-amber-200 bg-amber-50 text-amber-700'
-                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300'
-                      } disabled:opacity-50`}
-                    >
-                      {voiceCommandProcessing ? (
-                        <Loader2 className="h-4.5 w-4.5 animate-spin" />
-                      ) : voiceCommandRecording ? (
-                        <PauseCircle className="h-4.5 w-4.5" />
-                      ) : (
-                        <Mic className="h-4.5 w-4.5" />
-                      )}
-                      {voiceCommandRecording ? 'Stop' : 'Parler'}
-                    </button>
-                  </div>
-                </div>
                 <div className="mt-4 rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm">
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Contexte patient</p>
-                  {activePatientId ? (
-                    isLoadingActivePatient ? (
-                      <div className="mt-3 space-y-2">
-                        <div className="h-4 w-1/2 animate-pulse rounded bg-slate-200" />
-                        <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200" />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
-                          Patient actif
-                        </div>
-                        <p className="mt-3 text-sm font-bold text-slate-900">
-                          {activePatient?.nom} {activePatient?.prenom}
-                        </p>
-                        <p className="mt-1 text-xs leading-6 text-slate-500">
-                          Ce patient est detecte automatiquement depuis la page ouverte. Les outils cliniques utiliseront ce contexte sans demander une nouvelle selection.
-                        </p>
-                      </>
-                    )
-                  ) : (
-                    <p className="mt-2 text-sm leading-6 text-slate-500">
-                      Aucun dossier patient actif. Le Hub reste disponible en mode global avec selection manuelle si necessaire.
-                    </p>
-                  )}
+                  <div className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                    Patient actif simulé
+                  </div>
+                  <p className="mt-3 text-sm font-bold text-slate-900">
+                    {mockPatientContext.name}
+                  </p>
+                  <p className="mt-1 text-xs leading-6 text-slate-500">
+                    {mockPatientContext.age} ans • {mockPatientContext.weight} • Allergie connue: {mockPatientContext.allergies.join(', ')}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {mockPatientContext.currentMedication.map((item) => (
+                      <span key={item} className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-600">
+                        Traitement: {item}
+                      </span>
+                    ))}
+                    {isLoadingActivePatient && activePatientId ? (
+                      <span className="rounded-full bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-700">
+                        Lecture du dossier réel en arrière-plan...
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <button
@@ -237,7 +220,6 @@ export default function FloatingAiHub({
         aria-label="Ouvrir le hub IA"
       >
         <Bot className="h-7 w-7" />
-        {voiceCommandRecording ? <span className="absolute right-2 top-2 h-3 w-3 rounded-full bg-rose-500 ring-4 ring-white/30" /> : null}
       </button>
     </>
   )

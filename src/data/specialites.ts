@@ -64,6 +64,12 @@ export const SPECIALITES_CONFIG: Record<string, SpecialiteConfig> = {
     family: 'medicale',
     features: defaultFeatures,
   },
+  gynecologie: {
+    key: 'gynecologie',
+    label: 'Gyn\u00e9cologie',
+    family: 'medicale',
+    features: defaultFeatures,
+  },
   'gynecologie-obstetrique': {
     key: 'gynecologie-obstetrique',
     label: 'Gynécologie Obstétrique',
@@ -150,6 +156,9 @@ const SPECIALITE_ALIASES: Record<string, string> = {
   'gastro-entérologie': 'gastro-enterologie',
   'gastro-enterologie': 'gastro-enterologie',
   'gastro enterologie': 'gastro-enterologie',
+  'gyn\u00e9cologie': 'gynecologie',
+  gynecologie: 'gynecologie',
+  gyneco: 'gynecologie',
   'gynécologie obstétrique': 'gynecologie-obstetrique',
   'gynecologie obstetrique': 'gynecologie-obstetrique',
   neurologie: 'neurologie',

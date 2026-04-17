@@ -78,6 +78,10 @@ function DashboardLayout() {
   const cacheLoadedRef = useRef(false)
 
   const title = useMemo(() => getPageTitle(location.pathname), [location.pathname])
+  const patientProfileMatch = useMatch('/patients/:id')
+  const patientInfoMatch = useMatch('/patients/:id/info')
+  const patientConsultationMatch = useMatch('/patients/:id/consultations/:consultationId')
+  const isPatientDossierRoute = Boolean(patientProfileMatch || patientInfoMatch || patientConsultationMatch)
 
   // Routes that need full-bleed layout (no padding wrapper, no scroll — component owns its own height)
   const FULL_BLEED_ROUTES = ['/secretaire']
@@ -413,19 +417,17 @@ function DashboardLayout() {
             <main className={`flex-1 overflow-x-hidden relative ${isFullBleed ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
               {isFullBleed
                 ? <Outlet />
-                : <div className="w-full max-w-[1400px] mx-auto px-5 md:px-[32px] py-[24px]"><Outlet /></div>
+                : (
+                  <div className={`mx-auto w-full px-5 py-[24px] md:px-[32px] ${isPatientDossierRoute ? 'max-w-[1560px]' : 'max-w-[1400px]'}`}>
+                    <Outlet />
+                  </div>
+                )
               }
             </main>
           </SidebarInset>
 
           <FloatingActionButton />
-          <FloatingAiHub
-            isProcessing={voiceCommandProcessing}
-            voiceCommandSupported={voiceCommandSupported}
-            voiceCommandRecording={voiceCommandRecording}
-            voiceCommandProcessing={voiceCommandProcessing}
-            onToggleVoiceCommand={handleVoiceCommandToggle}
-          />
+          <FloatingAiHub isProcessing={voiceCommandProcessing} />
 
           <PatientFormModal open={globalModal?.type === 'patient'} onClose={closeGlobalModal} />
           <AppointmentFormModal open={globalModal?.type === 'appointment'} onClose={closeGlobalModal} />

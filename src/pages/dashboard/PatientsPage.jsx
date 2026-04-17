@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AppButton } from '../../components/dashboard/DashboardPrimitives'
 import PatientFormModal from '../../components/forms/PatientFormModal'
+import GrowthTrendChart from '../../components/patient/GrowthTrendChart'
 import { getPatients, getConsultations, getRdv } from '../../lib/api'
 import { useAppContext } from '../../context/AppContext'
 import PatientProfileView from './PatientProfileView'
@@ -117,6 +118,30 @@ const PEDIATRIC_GROWTH_SNAPSHOTS = [
   { poids: '24.6 kg', taille: '122 cm', imc: '16.5', percentile: 'P71', nextCheck: '29 avr. 2026' },
 ]
 
+const PEDIATRIC_WEIGHT_AGE_CURVES = [
+  [
+    { label: '2 ans', value: 11.8, note: 'Entree en suivi.' },
+    { label: '3 ans', value: 13.6, note: 'Croissance reguliere.' },
+    { label: '4 ans', value: 15.1, note: 'Bonne tolerance alimentaire.' },
+    { label: '5 ans', value: 16.7, note: 'Courbe stable.' },
+    { label: '6 ans', value: 18.4, note: 'Dernier releve saisi.' },
+  ],
+  [
+    { label: '12 mois', value: 8.7, note: 'Point annuel.' },
+    { label: '18 mois', value: 9.6, note: 'Suivi rapproché du poids.' },
+    { label: '24 mois', value: 10.4, note: 'Apports alimentaires surveilles.' },
+    { label: '30 mois', value: 11.2, note: 'Evolution rassurante.' },
+    { label: '3 ans', value: 12.1, note: 'Dernier releve saisi.' },
+  ],
+  [
+    { label: '3 ans', value: 14.8, note: 'Courbe de reference.' },
+    { label: '4 ans', value: 17.0, note: 'Progression attendue.' },
+    { label: '5 ans', value: 19.5, note: 'Suivi annuel.' },
+    { label: '6 ans', value: 22.1, note: 'Croissance harmonieuse.' },
+    { label: '7 ans', value: 24.6, note: 'Dernier releve saisi.' },
+  ],
+]
+
 const PEDIATRIC_GUARDIAN_NOTES = [
   { relation: 'Mere', emergency: 'Oui', consent: 'Consentement numerique signe' },
   { relation: 'Pere', emergency: 'Oui', consent: 'Autorisation vaccinale recue' },
@@ -146,6 +171,17 @@ function getPediatricRowMeta(patient, index) {
     growthStatus: patient.growthStatus || fallback.growthStatus,
     vaccineStatus: patient.vaccineStatus || fallback.vaccineStatus,
   }
+}
+
+function buildPediatricGrowthCurve(index, latestWeightLabel) {
+  const curve = PEDIATRIC_WEIGHT_AGE_CURVES[index % PEDIATRIC_WEIGHT_AGE_CURVES.length]
+  const currentWeight = Number.parseFloat(String(latestWeightLabel || '').replace(',', '.')) || curve[curve.length - 1]?.value || 0
+
+  return curve.map((point, pointIndex) => (
+    pointIndex === curve.length - 1
+      ? { ...point, value: currentWeight, note: 'Dernier releve du registre pediatrique.' }
+      : point
+  ))
 }
 
 function PatientsPage() {
@@ -371,11 +407,14 @@ function PatientsPage() {
         growthStatus: meta.growthStatus,
         vaccineStatus: meta.vaccineStatus,
         ...growth,
+        growthCurve: buildPediatricGrowthCurve(index, growth.poids),
         ...guardianNote,
         ...vaccine,
       }
     })
   }, [displayPatients])
+
+  const featuredGrowthPatient = pediatricWorkspaceData[0] || null
 
   const pediatricViewTitle = useMemo(() => {
     if (patientsView === 'growth') return 'Suivi croissance'
@@ -398,7 +437,59 @@ function PatientsPage() {
                 <h3 className="text-xl font-semibold text-slate-900">Courbes de croissance et reperes cliniques</h3>
               </div>
             </div>
-            <div className="mt-6 space-y-4">
+            {featuredGrowthPatient ? (
+              <div className="mt-6 space-y-5">
+                <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{featuredGrowthPatient.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{featuredGrowthPatient.ageLabel} · {featuredGrowthPatient.recordNumber}</p>
+                    </div>
+                    <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-sky-700">
+                      {featuredGrowthPatient.percentile}
+                    </span>
+                  </div>
+                  <div className="mt-5 rounded-[24px] border border-white bg-white p-4 shadow-sm">
+                    <GrowthTrendChart data={featuredGrowthPatient.growthCurve} seriesLabel="Poids / Age" height={300} />
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {[
+                      ['Poids', featuredGrowthPatient.poids],
+                      ['Taille', featuredGrowthPatient.taille],
+                      ['IMC', featuredGrowthPatient.imc],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-2xl border border-white bg-white px-4 py-3 shadow-sm">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                        <p className="mt-2 text-lg font-semibold text-slate-900">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-slate-700">{featuredGrowthPatient.growthStatus}</span>
+                    <span className="text-sky-700">Controle: {featuredGrowthPatient.nextCheck}</span>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  {pediatricWorkspaceData.map((entry) => (
+                    <div key={`${entry.id}-growth-summary`} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{entry.name}</p>
+                          <p className="mt-1 text-xs text-slate-500">{entry.ageLabel}</p>
+                        </div>
+                        <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">
+                          {entry.percentile}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-sm font-medium text-slate-700">{entry.growthStatus}</p>
+                      <p className="mt-1 text-sm text-slate-500">Prochain controle: {entry.nextCheck}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="hidden mt-6 space-y-4">
               {pediatricWorkspaceData.map((entry) => (
                 <div key={entry.id} className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -646,23 +737,18 @@ function PatientsPage() {
       </div>
 
       {isPediatric ? (
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[28px] border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6 shadow-[0_10px_35px_rgba(14,165,233,0.08)]">
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-sky-100 text-sky-700">
-                <Baby className="h-7 w-7" />
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Template pediatrie actif</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-900">Vue pediatrique complete</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  La sidebar, les actions metier, la liste patients et les dossiers affichent maintenant le contexte enfant, tuteurs, vaccination et croissance.
-                </p>
-              </div>
+        <div className="rounded-[24px] border border-sky-100 bg-white p-4 shadow-[0_8px_30px_rgba(14,165,233,0.06)]">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Quick Nav</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">Acces pediatrique</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">
+              <Baby className="h-5 w-5" />
             </div>
           </div>
 
-          <div className="grid gap-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
             {pediatricQuickActions.map((action) => {
               const Icon = action.icon
               const isActive = patientsView === action.key
