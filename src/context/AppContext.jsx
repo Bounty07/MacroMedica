@@ -90,6 +90,25 @@ export function AppProvider({ children }) {
     setConsultations(data || [])
   }, [])
 
+  const refreshProfile = useCallback(async () => {
+    if (!currentUserIdRef.current) return null
+
+    const prof = await fetchProfile(currentUserIdRef.current)
+    if (!prof) return null
+
+    setProfile(prof)
+
+    if (prof.cabinet_id) {
+      Promise.all([
+        loadPatients(prof.cabinet_id),
+        loadRdv(prof.cabinet_id),
+        loadConsultations(prof.cabinet_id),
+      ]).catch(console.error)
+    }
+
+    return prof
+  }, [fetchProfile, loadConsultations, loadPatients, loadRdv])
+
   // Handle a valid session — set user + profile + authenticated
   const handleSession = useCallback(async (session) => {
     if (!session?.user) {
@@ -291,8 +310,43 @@ export function AppProvider({ children }) {
   const workspaceRole = isSecretary ? 'secretaire' : 'admin'
   const cabinet = profile?.cabinets || profile?.clinics || null
   const cabinetSpecialite = cabinet?.specialite || null
-  const specialiteKey = workspaceSpecialiteOverride || normalizeSpecialiteKey(cabinetSpecialite)
+  const specialiteKey = normalizeSpecialiteKey(cabinetSpecialite || workspaceSpecialiteOverride)
   const specialiteConfig = getSpecialiteConfig(specialiteKey)
+
+  const updateCabinetSpecialite = useCallback(async (nextValue) => {
+    const normalized = normalizeSpecialiteKey(nextValue)
+
+    if (!profile?.cabinet_id) {
+      throw new Error('Cabinet introuvable.')
+    }
+
+    const { data, error } = await supabase
+      .from('cabinets')
+      .update({ specialite: normalized })
+      .eq('id', profile.cabinet_id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    setWorkspaceSpecialiteOverride(normalized)
+    setProfile((current) => {
+      if (!current) return current
+
+      const nextCabinet = {
+        ...(current.cabinets || current.clinics || {}),
+        ...(data || {}),
+      }
+
+      return {
+        ...current,
+        cabinets: nextCabinet,
+        clinics: nextCabinet,
+      }
+    })
+
+    return data
+  }, [profile?.cabinet_id])
 
   const value = useMemo(() => ({
     user,
@@ -334,6 +388,8 @@ export function AppProvider({ children }) {
     setInboxAlertCount,
     registerVoiceCommandHandler,
     runVoiceCommandHandler,
+    refreshProfile,
+    updateCabinetSpecialite,
 
     // Fallbacks for un-migrated components
     patients,
@@ -355,7 +411,7 @@ export function AppProvider({ children }) {
         loadConsultations(profile.cabinet_id)
       }
     },
-  }), [user, profile, role, isSecretary, isAdmin, workspaceRole, cabinet, cabinetSpecialite, workspaceSpecialiteOverride, specialiteKey, specialiteConfig, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, inboxAlertCount, patients, rdvList, consultations, waitingList, registerVoiceCommandHandler, runVoiceCommandHandler])
+  }), [user, profile, role, isSecretary, isAdmin, workspaceRole, cabinet, cabinetSpecialite, workspaceSpecialiteOverride, specialiteKey, specialiteConfig, isAuthenticated, isInitializing, toasts, globalModal, confirmDialog, notificationPrefs, inboxAlertCount, patients, rdvList, consultations, waitingList, registerVoiceCommandHandler, runVoiceCommandHandler, refreshProfile, updateCabinetSpecialite])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

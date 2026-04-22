@@ -13,6 +13,7 @@ function DashboardHeader({
   voiceCommandProcessing,
   voiceCommandSupported,
   onToggleVoiceCommand,
+  patientContext = false,
 }) {
   const navigate = useNavigate()
   const { profile, currentUser, logout } = useAppContext()
@@ -46,6 +47,18 @@ function DashboardHeader({
 
   const hasAnyResults = searchResults && (searchResults.patients?.length || searchResults.rdv?.length || searchResults.consultations?.length)
   const showDropdown = isOpen && search?.length >= 1
+  const accentBorder = patientContext ? 'border-blue-200' : 'border-teal-200'
+  const accentSoftBorder = patientContext ? 'border-blue-300' : 'border-teal-300'
+  const accentRing = patientContext ? 'ring-blue-100' : 'ring-teal-100'
+  const accentText = patientContext ? 'text-blue-700' : 'text-teal-700'
+  const accentBg = patientContext ? 'bg-blue-50' : 'bg-teal-50'
+  const accentFill = patientContext ? 'bg-blue-600' : 'bg-teal-600'
+  const accentHoverBorder = patientContext ? 'hover:border-blue-200' : 'hover:border-teal-200'
+  const accentHoverText = patientContext ? 'hover:text-blue-700' : 'hover:text-teal-700'
+  const focusAccentBorder = patientContext ? 'focus-within:border-blue-300' : 'focus-within:border-teal-300'
+  const headerStyle = patientContext
+    ? { background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(12px)', borderBottomColor: 'rgba(226,232,240,0.95)' }
+    : { background: 'rgba(240,253,249,0.9)', backdropFilter: 'blur(12px)', borderBottomColor: 'rgba(13,148,136,0.08)' }
 
   const handleResultClick = (path) => {
     navigate(path)
@@ -54,17 +67,17 @@ function DashboardHeader({
   }
 
   return (
-    <header className="sticky top-0 z-50 flex h-[72px] items-center justify-between border-b px-5 md:px-9 py-2" style={{ background: 'rgba(240,253,249,0.9)', backdropFilter: 'blur(12px)', borderBottomColor: 'rgba(13,148,136,0.08)' }}>
+    <header className="sticky top-0 z-50 flex h-[72px] items-center justify-between border-b px-5 py-2 md:px-9" style={headerStyle}>
 
       <div className="flex flex-1 items-center gap-4">
-        <button type="button" onClick={onMenuClick} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:border-teal-200 hover:text-teal-700 lg:hidden">
+        <button type="button" onClick={onMenuClick} className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition ${accentHoverBorder} ${accentHoverText} lg:hidden`}>
           <Menu className="h-5 w-5" />
         </button>
 
         {/* ── Search ── */}
         <div ref={searchRef} className="relative w-full max-w-lg">
-          <label className={`flex h-11 items-center gap-3 rounded-2xl border bg-white px-5 shadow-sm transition ${isOpen ? 'border-teal-300 ring-2 ring-teal-100' : 'border-slate-200 focus-within:border-teal-300'}`}>
-            {searchLoading ? <Loader2 className="h-5 w-5 text-teal-600 animate-spin" /> : <Search className="h-5 w-5 text-slate-400" />}
+          <label className={`flex h-11 items-center gap-3 rounded-2xl border bg-white px-5 shadow-sm transition ${isOpen ? `${accentSoftBorder} ring-2 ${accentRing}` : `border-slate-200 ${focusAccentBorder}`}`}>
+            {searchLoading ? <Loader2 className={`h-5 w-5 animate-spin ${patientContext ? 'text-blue-600' : 'text-teal-600'}`} /> : <Search className="h-5 w-5 text-slate-400" />}
             <input
               ref={inputRef}
               type="text"

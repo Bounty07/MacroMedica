@@ -27,6 +27,7 @@ import BilingualOrdonnanceFormModal from '../../components/forms/BilingualOrdonn
 import GrowthTrendChart from '../../components/patient/GrowthTrendChart'
 import { useAppContext } from '../../context/AppContext'
 import { normalizeSpecialiteKey } from '../../data/specialites'
+import PatientWorkspaceV2 from './PatientWorkspaceV2'
 import {
   createConsultation,
   generatePdf,
@@ -909,6 +910,8 @@ function ConsultationHistoryModal({ consultation, open, onClose, onCopy }) {
 }
 
 export default function PatientDashboardPage() {
+  return <PatientWorkspaceV2 />
+
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()

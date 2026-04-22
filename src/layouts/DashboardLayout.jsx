@@ -85,7 +85,7 @@ function DashboardLayout() {
 
   // Routes that need full-bleed layout (no padding wrapper, no scroll — component owns its own height)
   const FULL_BLEED_ROUTES = ['/secretaire']
-  const isFullBleed = FULL_BLEED_ROUTES.includes(location.pathname)
+  const isFullBleed = FULL_BLEED_ROUTES.includes(location.pathname) || isPatientDossierRoute
 
   const breadcrumbs = useMemo(() => {
     const segments = location.pathname.split('/').filter(Boolean)
@@ -388,12 +388,14 @@ function DashboardLayout() {
     <PinProvider>
     <SidebarProvider defaultOpen={localStorage.getItem('sidebar-collapsed') !== 'true'}>
       <TooltipProvider>
-        <div className="flex h-screen w-full overflow-hidden bg-[#f0f9f9]">
-          <div className="hidden lg:block shrink-0">
-            <DashboardSidebar />
-          </div>
+        <div className={`flex h-screen w-full overflow-hidden ${isPatientDossierRoute ? 'bg-slate-100' : 'bg-[#f0f9f9]'}`}>
+          {!isPatientDossierRoute ? (
+            <div className="hidden lg:block shrink-0">
+              <DashboardSidebar />
+            </div>
+          ) : null}
 
-          {sidebarOpen ? (
+          {sidebarOpen && !isPatientDossierRoute ? (
             <div className="fixed inset-0 z-[100] bg-slate-950/50 lg:hidden">
               <div className="h-full w-[88%] max-w-sm">
                 <DashboardSidebar mobile onClose={() => setSidebarOpen(false)} />
@@ -402,17 +404,20 @@ function DashboardLayout() {
           ) : null}
 
           <SidebarInset className="flex-1 min-w-0 flex flex-col bg-transparent overflow-hidden">
-            <DashboardHeader
-              onMenuClick={() => setSidebarOpen(true)}
-              search={search}
-              setSearch={setSearch}
-              searchResults={searchResults}
-              searchLoading={searchLoading}
-              voiceCommandRecording={voiceCommandRecording}
-              voiceCommandProcessing={voiceCommandProcessing}
-              voiceCommandSupported={voiceCommandSupported}
-              onToggleVoiceCommand={handleVoiceCommandToggle}
-            />
+            {!isPatientDossierRoute ? (
+              <DashboardHeader
+                onMenuClick={() => setSidebarOpen(true)}
+                search={search}
+                setSearch={setSearch}
+                searchResults={searchResults}
+                searchLoading={searchLoading}
+                voiceCommandRecording={voiceCommandRecording}
+                voiceCommandProcessing={voiceCommandProcessing}
+                voiceCommandSupported={voiceCommandSupported}
+                onToggleVoiceCommand={handleVoiceCommandToggle}
+                patientContext={isPatientDossierRoute}
+              />
+            ) : null}
 
             <main className={`flex-1 overflow-x-hidden relative ${isFullBleed ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
               {isFullBleed
@@ -426,8 +431,8 @@ function DashboardLayout() {
             </main>
           </SidebarInset>
 
-          <FloatingActionButton />
-          <FloatingAiHub isProcessing={voiceCommandProcessing} />
+          {!isPatientDossierRoute ? <FloatingActionButton /> : null}
+          {!isPatientDossierRoute ? <FloatingAiHub isProcessing={voiceCommandProcessing} /> : null}
 
           <PatientFormModal open={globalModal?.type === 'patient'} onClose={closeGlobalModal} />
           <AppointmentFormModal open={globalModal?.type === 'appointment'} onClose={closeGlobalModal} />

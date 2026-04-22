@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { SPECIALITE_OPTIONS } from '../../data/specialites'
 
 function SettingsPage() {
-  const { currentUser, cabinetId, notificationPrefs, setNotificationPrefs, notify, specialiteKey, setWorkspaceSpecialiteOverride } = useAppContext()
+  const { currentUser, cabinet, cabinetId, notificationPrefs, setNotificationPrefs, notify, specialiteKey, updateCabinetSpecialite } = useAppContext()
   const [profile, setProfile] = useState(currentUser)
   const [selectedSpecialite, setSelectedSpecialite] = useState(specialiteKey)
   const [loading, setLoading] = useState(false)
@@ -62,9 +62,8 @@ function SettingsPage() {
     event.preventDefault()
     setLoading(true)
     try {
-      setWorkspaceSpecialiteOverride(selectedSpecialite)
-      await new Promise((resolve) => window.setTimeout(resolve, 300))
-      notify({ title: 'Profil sauvegarde', description: 'Le template clinique actif a ete mis a jour.' })
+      await updateCabinetSpecialite(selectedSpecialite)
+      notify({ title: 'Profil sauvegarde', description: 'Le template clinique par defaut du cabinet a ete mis a jour.' })
     } catch (err) {
       notify({ title: 'Erreur', description: err.message || "Échec de la sauvegarde", tone: 'error' })
     } finally {
@@ -209,14 +208,15 @@ function SettingsPage() {
               <select
                 value={selectedSpecialite}
                 onChange={(event) => setSelectedSpecialite(event.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-300"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               >
                 {SPECIALITE_OPTIONS.map((option) => (
                   <option key={option.key} value={option.key}>{option.label}</option>
                 ))}
               </select>
               <p className="mt-2 text-sm text-slate-500">
-                Ce choix pilote le template global. Les donnees affiches en medecine generale et en pediatrie sont volontairement differentes.
+                Ce choix est stocke au niveau du cabinet et definit le template dossier charge par defaut pour tous les patients.
+                {cabinet?.nom ? ` Cabinet actif : ${cabinet.nom}.` : ''}
               </p>
             </label>
             {[
@@ -229,10 +229,10 @@ function SettingsPage() {
             ].map(([key, label]) => (
               <label key={key} className="block">
                 <span className="mb-2 block text-base font-medium text-slate-700">{label}</span>
-                <input value={profile[key] || ''} onChange={(event) => setProfile((current) => ({ ...current, [key]: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-teal-300" />
+                <input value={profile[key] || ''} onChange={(event) => setProfile((current) => ({ ...current, [key]: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
               </label>
             ))}
-            <button type="submit" disabled={loading} className="interactive rounded-2xl bg-teal-600 px-5 py-3 text-base font-medium text-white disabled:opacity-70">
+            <button type="submit" disabled={loading} className="interactive rounded-2xl bg-blue-600 px-5 py-3 text-base font-medium text-white disabled:opacity-70">
               {loading ? 'Enregistrement...' : 'Sauvegarder'}
             </button>
           </form>
